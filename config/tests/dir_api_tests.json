@@ -1,6 +1,7 @@
 ﻿{
   "sectionName": "Dir API",
   "initScript": "const managerBase = new URL('.', location.href).pathname.replace(/\\/$/, '');\nconst apiBase = managerBase + '/api/dir';\nconst baseDir = '/.temp';\nconst namedTestDir = 'api-dir-named';\nreturn {\n  apiBase, baseDir, namedTestDir,\n  createDirUrl: apiBase + '/create_dir.php',\n  scanDirUrl: apiBase + '/scan_dir.php',\n  renameDirUrl: apiBase + '/rename_dir.php',\n  deleteDirUrl: apiBase + '/delete_dir.php',\n  message: 'init done'\n};",
+  "finallyScript": "const names = ['new-folder', 'api-dir-named', 'api-dir-renamed'];\nfor (const n of names) {\n  try { await utils.postForm(deleteDirUrl, { path: baseDir + '/' + n }); } catch (_) {}\n}\nreturn { message: 'cleanup done' };",
   "tests": [
     {
       "id": "create",

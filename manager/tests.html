@@ -28,6 +28,12 @@
     .case-row.running { background: #fff7dc; }
     .case-row.success { background: #e9f9ee; }
     .case-row.fail { background: #fdecec; }
+    .case-row.init-row.pending { background: #eef6ff; }
+    .case-row.init-row .case-name { color: #1e3a8a; }
+    .case-row.init-row .status { color: #1e3a8a; }
+    .case-row.finally-row.pending { background: #f3f4f6; }
+    .case-row.finally-row .case-name { color: #4b5563; }
+    .case-row.finally-row .status { color: #4b5563; }
     .status { font-weight: 600; }
     .case-name { font-weight: 500; }
     .case-msg { color: #475569; font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -58,6 +64,7 @@
   </div>
 
   <script src="/manager/js/test_utils.js"></script>
+  <script src="/manager/js/file/upload_utils.js"></script>
   <script>
     const GROUPS_URL = '/config/tests/groups.json';
     const groupsRoot = document.getElementById('groupsRoot');
@@ -67,6 +74,7 @@
     const saveBtn = document.getElementById('saveBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     const api = window.TestApi;
+    const upload = window.UploadLib;
 
     const groups = [];
     let editing = null;
@@ -94,22 +102,32 @@
         wrap.appendChild(btn);
       });
     }
-    function pickOneFile() {
-      return new Promise((resolve) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.onchange = () => resolve((input.files && input.files[0]) || null);
-        input.click();
-      });
-    }
-    function pickFolderFiles() {
-      return new Promise((resolve) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.webkitdirectory = true;
-        input.multiple = true;
-        input.onchange = () => resolve(Array.from(input.files || []));
-        input.click();
+    function pickDragItems() {
+      return new Promise((resolve, reject) => {
+        const mask = document.createElement('div');
+        mask.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:10001;';
+        const box = document.createElement('div');
+        box.style.cssText = 'width:min(560px,92vw);padding:20px;border:2px dashed #94a3b8;border-radius:12px;background:#fff;text-align:center;color:#334155;';
+        box.textContent = '拖放檔案/資料夾到這裡，按 Esc 或點背景取消';
+        mask.appendChild(box);
+        document.body.appendChild(mask);
+        const cleanup = () => { document.removeEventListener('keydown', onKey); mask.remove(); };
+        const onKey = (e) => { if (e.key === 'Escape') { cleanup(); resolve({ files: [], dirs: [] }); } };
+        document.addEventListener('keydown', onKey);
+        mask.addEventListener('click', (e) => { if (e.target === mask) { cleanup(); resolve({ files: [], dirs: [] }); } });
+        mask.addEventListener('dragover', (e) => { e.preventDefault(); });
+        mask.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          try {
+            const items = e.dataTransfer?.items || [];
+            const res = await upload.collectFromDragItems(items, '');
+            cleanup();
+            resolve(res);
+          } catch (err) {
+            cleanup();
+            reject(err);
+          }
+        });
       });
     }
     async function uploadByFormData(url, files, dirs) {
@@ -121,90 +139,72 @@
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${text}`);
       return text;
     }
-    function dirname(path) {
-      const p = String(path || '').replace(/\\/g, '/');
-      const i = p.lastIndexOf('/');
-      return i >= 0 ? p.slice(0, i) : '';
-    }
     function isTransferGroup(group) { return group.meta.id === 'transfer_api'; }
-    function triggerTransferDownload(group) {
-      const path = group.state.scope.transferDirPath;
-      const url = group.state.scope.downloadDirUrl;
-      if (!path || !url) return false;
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = url;
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'path';
-      input.value = path;
-      form.appendChild(input);
-      document.body.appendChild(form);
-      form.submit();
-      form.remove();
-      return true;
-    }
     function updateTransferUi(group) {
       if (!isTransferGroup(group) || !group.transfer) return;
       const t = group.transfer;
       const runBtn = group.controls.querySelector('[data-act="run"]');
       const stepBtn = group.controls.querySelector('[data-act="step"]');
-      const readyToRun = t.fileSelected && t.folderSelected;
-      runBtn.disabled = !readyToRun;
-      stepBtn.disabled = !readyToRun;
+      runBtn.disabled = false;
+      stepBtn.disabled = false;
 
       const uploadFileRow = group.rowById.upload_file;
       const uploadFolderRow = group.rowById.upload_folder;
-      const downloadRow = group.rowById.download_dir;
+      const uploadDragRow = group.rowById.upload_drag;
       if (uploadFileRow) {
-        if (t.fileUploaded) {
+        if (t.fileSelected) {
           setRowActions(uploadFileRow, []);
         } else {
           setRowActions(uploadFileRow, [{
-            label: t.fileSelected ? '重新選檔' : '選擇檔案',
+            label: '選擇檔案',
             onClick: async () => {
-              const f = await pickOneFile();
-              if (!f) return;
-              t.file = f;
+              const picked = await upload.pickFilesMulti();
+              if (!picked.length) return;
+              t.files = picked;
               t.fileSelected = true;
-              setRowMsg(uploadFileRow, `staged: ${f.name}`);
-              appendLog(group, `upload_file: staged ${f.name}`);
+              setRowMsg(uploadFileRow, `staged files: ${t.files.length}`);
+              appendLog(group, `upload_file: staged total ${t.files.length}`);
               updateTransferUi(group);
             }
           }]);
         }
       }
       if (uploadFolderRow) {
-        if (t.folderUploaded) {
+        if (t.folderSelected) {
           setRowActions(uploadFolderRow, []);
         } else {
           setRowActions(uploadFolderRow, [{
-            label: t.folderSelected ? '重新選資料夾' : '選擇資料夾',
+            label: '選擇資料夾',
             onClick: async () => {
-              const files = await pickFolderFiles();
+              const files = await upload.pickSingleFolder();
               if (!files.length) return;
               t.folderFiles = files;
               t.folderSelected = true;
-              const top = (files[0].webkitRelativePath || '').split('/')[0] || '(unknown)';
-              setRowMsg(uploadFolderRow, `staged folder: ${top}`);
-              appendLog(group, `upload_folder: staged ${files.length} files`);
+              const tops = new Set(files.map((x) => (x.webkitRelativePath || '').split('/')[0]).filter(Boolean));
+              setRowMsg(uploadFolderRow, `staged folders: ${tops.size}, files: ${(t.folderFiles || []).length}`);
+              appendLog(group, `upload_folder: staged total ${(t.folderFiles || []).length} files`);
               updateTransferUi(group);
             }
           }]);
         }
       }
-      if (downloadRow) {
-        if (t.showDownloadButton) {
-          setRowActions(downloadRow, [{
-            label: '下載資料夾',
-            onClick: () => {
-              if (!triggerTransferDownload(group)) return appendLog(group, 'download_dir: 無法觸發下載');
-              setRowMsg(downloadRow, 'download triggered');
-              appendLog(group, 'download_dir: triggered');
+      if (uploadDragRow) {
+        if (t.dragSelected) {
+          setRowActions(uploadDragRow, []);
+        } else {
+          setRowActions(uploadDragRow, [{
+            label: '拖放導入',
+            onClick: async () => {
+              const picked = await pickDragItems();
+              if (!picked.files.length) return;
+              t.dragFiles = picked.files;
+              t.dragDirs = picked.dirs || [];
+              t.dragSelected = true;
+              setRowMsg(uploadDragRow, `staged drag files: ${t.dragFiles.length}`);
+              appendLog(group, `upload_drag: staged ${t.dragFiles.length} files`);
+              updateTransferUi(group);
             }
           }]);
-        } else {
-          setRowActions(downloadRow, []);
         }
       }
     }
@@ -214,6 +214,7 @@
       return {
         sectionName: data.sectionName || 'API',
         initScript: String(data.initScript || ''),
+        finallyScript: String(data.finallyScript || ''),
         tests: Array.isArray(data.tests) ? data.tests : []
       };
     }
@@ -230,8 +231,10 @@
     function resetGroupState(group) {
       group.state = { stepIndex: 0, initDone: false, scope: {}, ctx: {} };
       if (isTransferGroup(group) && group.transfer) {
-        group.state.scope.selectedUploadFile = group.transfer.file;
+        group.state.scope.selectedUploadFiles = group.transfer.files;
         group.state.scope.selectedUploadFolderFiles = group.transfer.folderFiles;
+        group.state.scope.selectedUploadDragFiles = group.transfer.dragFiles;
+        group.state.scope.selectedUploadDragDirs = group.transfer.dragDirs;
       }
       group.logDom.textContent = '';
       Object.values(group.rowById).forEach((row) => { setRowStatus(row, 'pending', 'Pending'); setRowMsg(row, ''); });
@@ -239,13 +242,16 @@
     function hardResetGroup(group) {
       if (isTransferGroup(group)) {
         group.transfer = {
-          file: null,
+          files: [],
           folderFiles: [],
+          dragFiles: [],
+          dragDirs: [],
           fileSelected: false,
           folderSelected: false,
+          dragSelected: false,
           fileUploaded: false,
           folderUploaded: false,
-          showDownloadButton: false
+          dragUploaded: false
         };
       }
       resetGroupState(group);
@@ -292,36 +298,43 @@
         setRowStatus(row, 'fail', 'Fail'); setRowMsg(row, e.message); appendLog(group, `[INIT] ${e.message}`); return false;
       }
     }
+    async function runFinally(group, reason) {
+      const row = group.rowById.__finally__;
+      if (!row) return true;
+      setRowStatus(row, 'running', 'Running'); setRowMsg(row, '');
+      try {
+        const r = await executeScript(group, group.suite.finallyScript, '__finally__');
+        const msg = applyReturnToScope(group, r) || '(no message)';
+        setRowStatus(row, 'success', 'Success'); setRowMsg(row, msg);
+        appendLog(group, `[FINALLY:${reason}] ${msg}`);
+        return true;
+      } catch (e) {
+        setRowStatus(row, 'fail', 'Fail'); setRowMsg(row, e.message);
+        appendLog(group, `[FINALLY:${reason}] ${e.message}`);
+        return false;
+      }
+    }
 
     async function runOne(group, idx) {
       const t = group.suite.tests[idx]; const row = group.rows.tests[idx];
       setRowStatus(row, 'running', 'Running'); setRowMsg(row, '');
       try {
         if (isTransferGroup(group) && group.transfer) {
-          group.state.scope.selectedUploadFile = group.transfer.file;
+          group.state.scope.selectedUploadFiles = group.transfer.files;
           group.state.scope.selectedUploadFolderFiles = group.transfer.folderFiles;
+          group.state.scope.selectedUploadDragFiles = group.transfer.dragFiles;
+          group.state.scope.selectedUploadDragDirs = group.transfer.dragDirs;
         }
         const r = await executeScript(group, t.scriptText, t.id);
         const msg = applyReturnToScope(group, r) || '(no message)';
         if (isTransferGroup(group) && group.transfer) {
           if (t.id === 'upload_file') group.transfer.fileUploaded = true;
           if (t.id === 'upload_folder') group.transfer.folderUploaded = true;
-          if (t.id === 'download_dir') {
-            const ok = triggerTransferDownload(group);
-            if (!ok) {
-              group.transfer.showDownloadButton = true;
-              updateTransferUi(group);
-              throw new Error('download auto trigger failed, please click button');
-            }
-          }
+          if (t.id === 'upload_drag') group.transfer.dragUploaded = true;
           updateTransferUi(group);
         }
         setRowStatus(row, 'success', 'Success'); setRowMsg(row, msg); appendLog(group, `${t.name}: ${msg}`); return true;
       } catch (e) {
-        if (isTransferGroup(group) && group.transfer && t.id === 'download_dir') {
-          group.transfer.showDownloadButton = true;
-          updateTransferUi(group);
-        }
         setRowStatus(row, 'fail', 'Fail'); setRowMsg(row, e.message); appendLog(group, `${t.name}: ${e.message}`); return false;
       }
     }
@@ -332,7 +345,11 @@
       if (!await runInit(group)) return;
       const waitMs = Math.max(0, Number(group.waitInput.value || 0));
       for (let i = 0; i < group.suite.tests.length; i++) {
-        const ok = await runOne(group, i); if (!ok) break;
+        const ok = await runOne(group, i);
+        if (!ok) {
+          await runFinally(group, `fail@${group.suite.tests[i].id}`);
+          break;
+        }
         if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
       }
     }
@@ -345,7 +362,11 @@
       }
       if (group.state.stepIndex >= group.suite.tests.length) return appendLog(group, 'Step Run 已完成');
       const ok = await runOne(group, group.state.stepIndex);
-      if (ok) group.state.stepIndex += 1;
+      if (ok) {
+        group.state.stepIndex += 1;
+      } else {
+        await runFinally(group, `fail@${group.suite.tests[group.state.stepIndex].id}`);
+      }
     }
 
     function openEditor(group, target) {
@@ -353,6 +374,9 @@
       if (target.kind === 'init') {
         modalTitle.textContent = `[${group.meta.title}] Init Script`;
         modalEditor.value = group.suite.initScript;
+      } else if (target.kind === 'finally') {
+        modalTitle.textContent = `[${group.meta.title}] Finally Script`;
+        modalEditor.value = group.suite.finallyScript;
       } else {
         const t = group.suite.tests[target.index];
         modalTitle.textContent = `[${group.meta.title}] ${t.name}`;
@@ -371,7 +395,7 @@
         <div class="controls">
           <h3>${meta.title}</h3>
           <div class="btn-col">
-            <button data-act="reload">Reload</button>
+            <button data-act="reset">Reset</button>
             <button data-act="run">Run</button>
             <button data-act="step">Step</button>
             <label>Wait(ms)</label>
@@ -396,11 +420,12 @@
         suite: { sectionName: meta.title, initScript: '', tests: [] },
         rows: { init: null, tests: [] },
         rowById: {},
-        state: { stepIndex: 0, initDone: false, scope: {}, ctx: {} }
+        state: { stepIndex: 0, initDone: false, scope: {}, ctx: {} },
+        transfer: null
       };
       groups.push(group);
 
-      controls.querySelector('[data-act="reload"]').addEventListener('click', () => loadGroup(group));
+      controls.querySelector('[data-act="reset"]').addEventListener('click', () => hardResetGroup(group));
       controls.querySelector('[data-act="run"]').addEventListener('click', () => runAll(group));
       controls.querySelector('[data-act="step"]').addEventListener('click', () => runStep(group));
       return group;
@@ -412,7 +437,7 @@
       group.rows = { init: null, tests: [] };
 
       const initRow = document.createElement('div');
-      initRow.className = 'case-row pending';
+      initRow.className = 'case-row pending init-row';
       initRow.innerHTML = `<div class="status">Pending</div><div class="case-name">[INIT] ${group.suite.sectionName}</div><div class="case-msg"></div><div class="case-actions"></div>`;
       initRow.addEventListener('click', () => openEditor(group, { kind: 'init' }));
       group.caseList.appendChild(initRow);
@@ -429,80 +454,30 @@
         group.rowById[t.id] = row;
       });
 
-      if (group.meta.id === 'transfer_api') {
-        const uploadFileRow = group.rowById.upload_file;
-        const uploadFolderRow = group.rowById.upload_folder;
-        const downloadRow = group.rowById.download_dir;
-        if (uploadFileRow) {
-          setRowActions(uploadFileRow, [{
-            label: '上傳檔案',
-            onClick: async () => {
-              try {
-                const f = await pickOneFile();
-                if (!f) return;
-                const targetDir = group.state.scope.transferDirPath || group.state.scope.baseDir;
-                if (!targetDir) throw new Error('請先執行 create 建立目錄');
-                await uploadByFormData(group.state.scope.uploadFilesUrl, [f], [targetDir]);
-                group.state.scope.uploadedSingleFileName = f.name;
-                setRowMsg(uploadFileRow, `uploaded: ${f.name}`);
-                appendLog(group, `upload_file: ${f.name}`);
-              } catch (e) {
-                setRowMsg(uploadFileRow, e.message);
-                appendLog(group, `upload_file: ${e.message}`);
-              }
-            }
-          }]);
-        }
-        if (uploadFolderRow) {
-          setRowActions(uploadFolderRow, [{
-            label: '上傳資料夾',
-            onClick: async () => {
-              try {
-                const files = await pickFolderFiles();
-                if (!files.length) return;
-                const targetDir = group.state.scope.transferDirPath || group.state.scope.baseDir;
-                if (!targetDir) throw new Error('請先執行 create 建立目錄');
-                const dirs = files.map((f) => {
-                  const relDir = dirname(f.webkitRelativePath || '');
-                  return relDir ? `${targetDir}/${relDir}` : targetDir;
-                });
-                await uploadByFormData(group.state.scope.uploadFilesUrl, files, dirs);
-                const top = (files[0].webkitRelativePath || '').split('/')[0] || '';
-                group.state.scope.uploadedFolderTop = top;
-                setRowMsg(uploadFolderRow, `uploaded folder: ${top || '(mixed)'}`);
-                appendLog(group, `upload_folder: ${files.length} files`);
-              } catch (e) {
-                setRowMsg(uploadFolderRow, e.message);
-                appendLog(group, `upload_folder: ${e.message}`);
-              }
-            }
-          }]);
-        }
-        if (downloadRow) {
-          setRowActions(downloadRow, [{
-            label: '下載資料夾',
-            onClick: () => {
-              const path = group.state.scope.transferDirPath;
-              if (!path) return appendLog(group, 'download_dir: 請先執行 create');
-              const form = document.createElement('form');
-              form.method = 'POST';
-              form.action = group.state.scope.downloadDirUrl;
-              const input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = 'path';
-              input.value = path;
-              form.appendChild(input);
-              document.body.appendChild(form);
-              form.submit();
-              form.remove();
-              setRowMsg(downloadRow, 'download triggered');
-              appendLog(group, 'download_dir: triggered');
-            }
-          }]);
-        }
+      const finallyRow = document.createElement('div');
+      finallyRow.className = 'case-row pending finally-row';
+      finallyRow.innerHTML = `<div class="status">Pending</div><div class="case-name">[FINALLY] ${group.suite.sectionName}</div><div class="case-msg"></div><div class="case-actions"></div>`;
+      finallyRow.addEventListener('click', () => openEditor(group, { kind: 'finally' }));
+      group.caseList.appendChild(finallyRow);
+      group.rowById.__finally__ = finallyRow;
+
+      if (isTransferGroup(group)) {
+        group.transfer = {
+          files: [],
+          folderFiles: [],
+          dragFiles: [],
+          dragDirs: [],
+          fileSelected: false,
+          folderSelected: false,
+          dragSelected: false,
+          fileUploaded: false,
+          folderUploaded: false,
+          dragUploaded: false
+        };
       }
 
       resetGroupState(group);
+      updateTransferUi(group);
       appendLog(group, `已載入 ${group.suite.tests.length} 個 test steps`);
     }
 
@@ -512,6 +487,8 @@
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         const data = await res.json();
         group.suite = normalizeConfig(data);
+        if (!group.suite.initScript.trim()) throw new Error('config requires initScript');
+        if (!group.suite.finallyScript.trim()) throw new Error('config requires finallyScript');
         renderSuite(group);
       } catch (e) {
         appendLog(group, '載入 config 失敗: ' + e.message);
@@ -531,6 +508,9 @@
       if (target.kind === 'init') {
         group.suite.initScript = modalEditor.value;
         appendLog(group, '已更新 INIT script（記憶體）');
+      } else if (target.kind === 'finally') {
+        group.suite.finallyScript = modalEditor.value;
+        appendLog(group, '已更新 FINALLY script（記憶體）');
       } else {
         group.suite.tests[target.index].scriptText = modalEditor.value;
         appendLog(group, `已更新 ${group.suite.tests[target.index].name} script（記憶體）`);

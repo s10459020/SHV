@@ -1,6 +1,7 @@
 ﻿{
   "sectionName": "File API",
   "initScript": "const managerBase = new URL('.', location.href).pathname.replace(/\\/$/, '');\nconst apiBase = managerBase + '/api/file';\nconst baseDir = '/.temp';\nconst namedTestFile = 'api-test-named.txt';\nreturn {\n  apiBase, baseDir, namedTestFile,\n  createFileUrl: apiBase + '/create_file.php',\n  scanFileUrl: apiBase + '/scan_file.php',\n  writeFileUrl: apiBase + '/write_file.php',\n  readFileUrl: apiBase + '/read_file.php',\n  renameFileUrl: apiBase + '/rename_file.php',\n  deleteFileUrl: apiBase + '/delete_file.php',\n  message: 'init done'\n};",
+  "finallyScript": "const names = ['new-file', 'api-test-named.txt', 'api-test-renamed.txt'];\nfor (const n of names) {\n  try { await utils.postForm(deleteFileUrl, { path: baseDir + '/' + n }); } catch (_) {}\n}\nreturn { message: 'cleanup done' };",
   "tests": [
     {
       "id": "create",

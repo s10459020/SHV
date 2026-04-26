@@ -37,6 +37,31 @@
       }
       return text;
     },
+    async downloadByPost(url, data, filenameHint) {
+      const body = new URLSearchParams();
+      Object.keys(data || {}).forEach((k) => {
+        if (data[k] !== undefined && data[k] !== null) body.append(k, String(data[k]));
+      });
+      const res = await fetch(url, { method: "POST", body });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      }
+      const blob = await res.blob();
+      let filename = filenameHint || "download.bin";
+      const dispo = res.headers.get("content-disposition") || "";
+      const m = dispo.match(/filename=\"?([^\";]+)\"?/i);
+      if (m && m[1]) filename = m[1];
+      const link = document.createElement("a");
+      const urlObj = URL.createObjectURL(blob);
+      link.href = urlObj;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(urlObj);
+      return filename;
+    },
     async runScriptText(scriptText, env) {
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
       const sharedScope = env.scope || {};
