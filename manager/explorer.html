@@ -101,7 +101,7 @@
 			}
 		</style>
 	</head>
-	<body onload="read(currentPath)">
+	<body onload="read(getStartupPath())">
 		<div class="top-nav">
 			<a class="home-banner" href="/manager/index.html">Explorer</a>
 		</div>
@@ -109,6 +109,7 @@
 		
 		<div class="toolbar-card">
 			<button onclick="pathBack(currentPath)"> 上一頁 </button>
+			<button onclick="resetExplorer()">重置</button>
 			<label> DIR: </label> 
 			<input id="path" type="text" oninput="read(this.value)"/> 
 			<button onclick="read(currentPath+'/..')"> .. </button>
@@ -167,6 +168,60 @@
 			let fileRenameApi = "/manager/api/file/rename_file.php" //?path, name
 			let fileDownloadApi = "/manager/api/file/download_file.php" //?path
 			let fileUploadsApi = "/manager/api/file/upload_files.php" //?path
+			const EXPLORER_PATH_COOKIE = 'manager_explorer_path_v1';
+
+			function normalizePath(path){
+				const raw = String(path ?? '').replace(/\\/g, '/');
+				const parts = [];
+				raw.split('/').forEach((seg) => {
+					if (!seg || seg === '.') return;
+					if (seg === '..') {
+						if (parts.length > 0) parts.pop();
+						return;
+					}
+					parts.push(seg);
+				});
+				return '/' + parts.join('/');
+			}
+			function joinPath(base, name){
+				return normalizePath(`${base}/${name}`);
+			}
+			function escapeHtml(text){
+				return String(text)
+					.replaceAll('&', '&amp;')
+					.replaceAll('<', '&lt;')
+					.replaceAll('>', '&gt;')
+					.replaceAll('"', '&quot;')
+					.replaceAll("'", '&#39;');
+			}
+			function setCookie(name, value, days = 30){
+				const d = new Date();
+				d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+				document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/; SameSite=Lax`;
+			}
+			function deleteCookie(name){
+				document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+			}
+			function getCookie(name){
+				const key = `${name}=`;
+				const arr = document.cookie.split(';');
+				for (const raw of arr){
+					const c = raw.trim();
+					if (c.startsWith(key)) return decodeURIComponent(c.substring(key.length));
+				}
+				return '';
+			}
+			function saveCurrentPath(path){
+				setCookie(EXPLORER_PATH_COOKIE, normalizePath(path));
+			}
+			function getStartupPath(){
+				const saved = getCookie(EXPLORER_PATH_COOKIE);
+				return saved ? normalizePath(saved) : '/';
+			}
+			function resetExplorer(){
+				deleteCookie(EXPLORER_PATH_COOKIE);
+				read('/');
+			}
 			
 			function initialPath(){
 				let filePath = window.location.pathname;
@@ -236,7 +291,9 @@
 				let viewDom = $('#view')
 				let editDom = $('#edit')
 				
+				path = normalizePath(path)
 				currentPath = path
+				saveCurrentPath(path)
 				pathDom.val(path)
 				console.log(path)
 				
@@ -276,12 +333,12 @@
 					// append dirs
 					dirs.forEach(dir => {
 						let item = $(itemTemplate.html())
-						item[0].path = `${path}/${dir}`
+						item[0].path = joinPath(path, dir)
 						item[0].type = 'dir'
 						item.find('span').text(dir)
 						item.find('span').addClass('dir')
 						item.find('span').dblclick(() => {
-							read(path+'/'+dir);
+							read(joinPath(path, dir));
 						})
 						listDom.append(item)
 					})
@@ -289,12 +346,12 @@
 					// append files
 					files.forEach(file => {
 						let item = $(itemTemplate.html())
-						item[0].path = `${path}/${file}`
+						item[0].path = joinPath(path, file)
 						item[0].type = 'file'
 						item.find('span').text(file)
 						item.find('span').addClass('file')
 						item.find('span').dblclick(() => {
-							read(path+'/'+file);
+							read(joinPath(path, file));
 						})
 						listDom.append(item)
 					})
@@ -303,7 +360,15 @@
 			
 			function readFile(path){
 				let viewDom = $('#view').find('iframe')
-				viewDom.attr('src', path);
+				$.post(fileReadApi, { path: path })
+					.done((res) => {
+						const safe = escapeHtml(res ?? '');
+						viewDom[0].srcdoc = `<pre style="margin:0;padding:12px;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,'Courier New',monospace;font-size:13px;">${safe}</pre>`;
+					})
+					.fail((xhr) => {
+						const msg = escapeHtml(xhr?.responseText || `${xhr.status} ${xhr.statusText}`);
+						viewDom[0].srcdoc = `<pre style="margin:0;padding:12px;color:#b91c1c;white-space:pre-wrap;">read failed: ${msg}</pre>`;
+					});
 			}
 			
 			function edit(path){

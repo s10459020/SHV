@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/../_lib.php';
+require_once __DIR__ . '/../../api_lib/_lib.php';
 $path = req('path');
 if ($path === null) tres('需要POST{path = (...)}');
 $dir = resolve_path($path);
@@ -11,3 +11,4 @@ foreach (scandir($dir) ?: [] as $n) {
     if (is_file($dir . '/' . $n)) $out[] = $n;
 }
 jres($out);
+

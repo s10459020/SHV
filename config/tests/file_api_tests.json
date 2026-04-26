@@ -1,0 +1,37 @@
+﻿{
+  "sectionName": "File API",
+  "initScript": "const managerBase = new URL('.', location.href).pathname.replace(/\\/$/, '');\nconst apiBase = managerBase + '/api/file';\nconst baseDir = '/.temp';\nconst namedTestFile = 'api-test-named.txt';\nreturn {\n  apiBase, baseDir, namedTestFile,\n  createFileUrl: apiBase + '/create_file.php',\n  scanFileUrl: apiBase + '/scan_file.php',\n  writeFileUrl: apiBase + '/write_file.php',\n  readFileUrl: apiBase + '/read_file.php',\n  renameFileUrl: apiBase + '/rename_file.php',\n  deleteFileUrl: apiBase + '/delete_file.php',\n  message: 'init done'\n};",
+  "tests": [
+    {
+      "id": "create",
+      "name": "create",
+      "scriptText": "const text1 = await utils.postForm(createFileUrl, { dir: baseDir });\nconst m1 = text1.match(/\\[(.+?)\\]/);\nassert(m1 && m1[1], 'create(default): parse fail');\nconst text2 = await utils.postForm(createFileUrl, { dir: baseDir, name: namedTestFile });\nconst m2 = text2.match(/\\[(.+?)\\]/);\nassert(m2 && m2[1], 'create(named): parse fail');\nreturn { defaultPath: m1[1], namedPath: m2[1], message: 'created 2 files' };"
+    },
+    {
+      "id": "scan",
+      "name": "scan",
+      "scriptText": "const text = await utils.postForm(scanFileUrl, { path: baseDir });\nconst arr = JSON.parse(text || '[]');\nassert(Array.isArray(arr), 'scan: result not array');\nassert(arr.includes(utils.basename(defaultPath)), 'scan: default missing');\nassert(arr.includes(utils.basename(namedPath)), 'scan: named missing');\nreturn { message: 'scan ok' };"
+    },
+    {
+      "id": "write",
+      "name": "write",
+      "scriptText": "await utils.postForm(writeFileUrl, { path: namedPath, content: 'hello test' });\nconst text = await utils.postForm(readFileUrl, { path: namedPath });\nassert(text.includes('hello test'), 'write: verify read mismatch');\nreturn { message: 'written + verified=' + namedPath };"
+    },
+    {
+      "id": "read",
+      "name": "read",
+      "scriptText": "const text = await utils.postForm(readFileUrl, { path: namedPath });\nassert(text.includes('hello test'), 'read: content mismatch');\nreturn { message: 'read ok' };"
+    },
+    {
+      "id": "rename",
+      "name": "rename",
+      "scriptText": "const text = await utils.postForm(renameFileUrl, { path: namedPath, name: 'api-test-renamed.txt' });\nconst m = text.match(/to \\[(.+?)\\]/);\nassert(m && m[1], 'rename: parse fail');\nconst arr = JSON.parse((await utils.postForm(scanFileUrl, { path: baseDir })) || '[]');\nassert(Array.isArray(arr), 'rename: scan result not array');\nassert(!arr.includes(utils.basename(namedPath)), 'rename: old name still exists');\nassert(arr.includes(utils.basename(m[1])), 'rename: new name missing');\nreturn { renamedPath: m[1], message: 'renamed + verified=' + m[1] };"
+    },
+    {
+      "id": "delete",
+      "name": "delete",
+      "scriptText": "await utils.postForm(deleteFileUrl, { path: defaultPath });\nawait utils.postForm(deleteFileUrl, { path: renamedPath });\nconst arr = JSON.parse((await utils.postForm(scanFileUrl, { path: baseDir })) || '[]');\nassert(Array.isArray(arr), 'delete: scan result not array');\nassert(!arr.includes(utils.basename(defaultPath)), 'delete: default still exists');\nassert(!arr.includes(utils.basename(renamedPath)), 'delete: renamed still exists');\nreturn { message: 'deleted + verified' };"
+    }
+  ]
+}
+

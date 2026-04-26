@@ -1,0 +1,27 @@
+﻿{
+  "sectionName": "Dir API",
+  "initScript": "const managerBase = new URL('.', location.href).pathname.replace(/\\/$/, '');\nconst apiBase = managerBase + '/api/dir';\nconst baseDir = '/.temp';\nconst namedTestDir = 'api-dir-named';\nreturn {\n  apiBase, baseDir, namedTestDir,\n  createDirUrl: apiBase + '/create_dir.php',\n  scanDirUrl: apiBase + '/scan_dir.php',\n  renameDirUrl: apiBase + '/rename_dir.php',\n  deleteDirUrl: apiBase + '/delete_dir.php',\n  message: 'init done'\n};",
+  "tests": [
+    {
+      "id": "create",
+      "name": "create",
+      "scriptText": "const t1 = await utils.postForm(createDirUrl, { dir: baseDir });\nconst m1 = t1.match(/\\[(.+?)\\/\\]/);\nassert(m1 && m1[1], 'create(default): parse fail');\nconst t2 = await utils.postForm(createDirUrl, { dir: baseDir, name: namedTestDir });\nconst m2 = t2.match(/\\[(.+?)\\/\\]/);\nassert(m2 && m2[1], 'create(named): parse fail');\nreturn { defaultDirPath: m1[1], namedDirPath: m2[1], message: 'created default + named' };"
+    },
+    {
+      "id": "scan",
+      "name": "scan",
+      "scriptText": "const text = await utils.postForm(scanDirUrl, { path: baseDir });\nconst arr = JSON.parse(text || '[]');\nassert(Array.isArray(arr), 'scan dir: result not array');\nassert(arr.includes(utils.basename(defaultDirPath)), 'scan dir: default missing');\nassert(arr.includes(utils.basename(namedDirPath)), 'scan dir: named missing');\nreturn { message: 'scan ok' };"
+    },
+    {
+      "id": "rename",
+      "name": "rename",
+      "scriptText": "const text = await utils.postForm(renameDirUrl, { path: namedDirPath, name: 'api-dir-renamed' });\nconst m = text.match(/to \\[(.+?)\\/\\]/);\nassert(m && m[1], 'rename dir: parse fail');\nconst arr = JSON.parse((await utils.postForm(scanDirUrl, { path: baseDir })) || '[]');\nassert(Array.isArray(arr), 'rename dir: scan result not array');\nassert(!arr.includes(utils.basename(namedDirPath)), 'rename dir: old name still exists');\nassert(arr.includes(utils.basename(m[1])), 'rename dir: new name missing');\nreturn { renamedDirPath: m[1], message: 'renamed + verified=' + m[1] };"
+    },
+    {
+      "id": "delete",
+      "name": "delete",
+      "scriptText": "await utils.postForm(deleteDirUrl, { path: defaultDirPath });\nawait utils.postForm(deleteDirUrl, { path: renamedDirPath });\nconst arr = JSON.parse((await utils.postForm(scanDirUrl, { path: baseDir })) || '[]');\nassert(Array.isArray(arr), 'delete dir: scan result not array');\nassert(!arr.includes(utils.basename(defaultDirPath)), 'delete dir: default still exists');\nassert(!arr.includes(utils.basename(renamedDirPath)), 'delete dir: renamed still exists');\nreturn { message: 'deleted + verified' };"
+    }
+  ]
+}
+

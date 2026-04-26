@@ -1,0 +1,31 @@
+﻿{
+  "sectionName": "Transfer API",
+  "initScript": "const managerBase = new URL('.', location.href).pathname.replace(/\\/$/, '');\nconst siteApiBase = managerBase + '/api/site';\nconst dirApiBase = managerBase + '/api/dir';\nconst fileApiBase = managerBase + '/api/file';\nconst workspaceRoot = (await utils.postForm(siteApiBase + '/get_root.php', {})).trim().replace(/\\/$/, '');\nconst baseDir = workspaceRoot + '/.temp';\nreturn {\n  baseDir,\n  transferDirName: 'transfer-box',\n  transferInnerFileName: 'inner.txt',\n  createDirUrl: dirApiBase + '/create_dir.php',\n  scanDirUrl: dirApiBase + '/scan_dir.php',\n  scanFileUrl: fileApiBase + '/scan_file.php',\n  createFileUrl: fileApiBase + '/create_file.php',\n  uploadFilesUrl: fileApiBase + '/upload_files.php',\n  downloadDirUrl: dirApiBase + '/download_dir.php',\n  message: 'init done'\n};",
+  "tests": [
+    {
+      "id": "create",
+      "name": "create dir",
+      "scriptText": "const text = await utils.postForm(createDirUrl, { dir: baseDir, name: transferDirName });\nconst m = text.match(/\\[(.+?)\\/\\]/);\nassert(m && m[1], 'create: parse fail');\nconst dirs = JSON.parse((await utils.postForm(scanDirUrl, { path: baseDir })) || '[]');\nassert(Array.isArray(dirs), 'create: scan dir not array');\nassert(dirs.includes(transferDirName), 'create: dir missing');\nreturn { transferDirPath: m[1], message: 'created=' + m[1] };"
+    },
+    {
+      "id": "upload_file",
+      "name": "upload file",
+      "scriptText": "assert(transferDirPath, 'please run create first');\nassert(selectedUploadFile, 'please choose file before run');\nawait utils.postMultipart(uploadFilesUrl, [selectedUploadFile], [transferDirPath]);\nconst uploadedSingleFileName = selectedUploadFile.name;\nconst files = JSON.parse((await utils.postForm(scanFileUrl, { path: transferDirPath })) || '[]');\nassert(Array.isArray(files), 'upload_file: scan file not array');\nassert(files.includes(uploadedSingleFileName), 'upload_file: uploaded file missing');\nreturn { uploadedSingleFileName, message: 'uploaded=' + uploadedSingleFileName };"
+    },
+    {
+      "id": "upload_folder",
+      "name": "upload folder",
+      "scriptText": "assert(transferDirPath, 'please run create first');\nassert(Array.isArray(selectedUploadFolderFiles) && selectedUploadFolderFiles.length > 0, 'please choose folder before run');\nconst dirname = (p) => { const i = String(p || '').lastIndexOf('/'); return i >= 0 ? p.slice(0, i) : ''; };\nconst dirsParam = selectedUploadFolderFiles.map((f) => {\n  const relDir = dirname(f.webkitRelativePath || '');\n  return relDir ? `${transferDirPath}/${relDir}` : transferDirPath;\n});\nawait utils.postMultipart(uploadFilesUrl, selectedUploadFolderFiles, dirsParam);\nconst uploadedFolderTop = (selectedUploadFolderFiles[0].webkitRelativePath || '').split('/')[0] || '';\nassert(uploadedFolderTop, 'upload_folder: folder top parse fail');\nconst dirs = JSON.parse((await utils.postForm(scanDirUrl, { path: transferDirPath })) || '[]');\nassert(Array.isArray(dirs), 'upload_folder: scan dir not array');\nassert(dirs.includes(uploadedFolderTop), 'upload_folder: folder top missing');\nreturn { uploadedFolderTop, message: 'uploaded folder=' + uploadedFolderTop };"
+    },
+    {
+      "id": "create_inner_file",
+      "name": "create inner file",
+      "scriptText": "assert(transferDirPath, 'please run create first');\nconst text = await utils.postForm(createFileUrl, { dir: transferDirPath, name: transferInnerFileName });\nconst m = text.match(/\\[(.+?)\\]/);\nassert(m && m[1], 'create_inner_file: parse fail');\nconst files = JSON.parse((await utils.postForm(scanFileUrl, { path: transferDirPath })) || '[]');\nassert(Array.isArray(files), 'create_inner_file: scan file not array');\nassert(files.includes(transferInnerFileName), 'create_inner_file: file missing');\nreturn { innerFilePath: m[1], message: 'created=' + transferInnerFileName };"
+    },
+    {
+      "id": "download_dir",
+      "name": "download dir",
+      "scriptText": "assert(transferDirPath, 'please run create first');\nreturn { message: 'click the row button to download folder' };"
+    }
+  ]
+}

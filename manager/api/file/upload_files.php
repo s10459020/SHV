@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/../_lib.php';
+require_once __DIR__ . '/../../api_lib/_lib.php';
 if (!isset($_FILES['files'])) tres('need FILE{files}!');
 $dirs = $_POST['dirs'] ?? $_POST['dirs[]'] ?? [];
 if (!is_array($dirs)) $dirs = [$dirs];
@@ -17,3 +17,4 @@ for ($i = 0; $i < $count; $i++) {
     move_uploaded_file((string)$tmpNames[$i], $targetDir . '/' . $baseName);
 }
 tres('ok');
+
