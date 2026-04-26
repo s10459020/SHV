@@ -7,18 +7,56 @@
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 		<script src="https://code.jquery.com/jquery.min.js"></script>
 		<style>
+			body{
+				margin: 0;
+				font-family: "Segoe UI", "Noto Sans TC", sans-serif;
+				background: #f6f8fb;
+				color: #1f2a37;
+			}
+			.page-wrap{
+				width: min(1080px, 94%);
+				margin: 18px auto 28px;
+			}
+			.top-nav{
+				position: sticky;
+				top: 0;
+				z-index: 9999;
+				background: #ffffff;
+				border-bottom: 1px solid #dbe3f2;
+				padding: 12px 14px;
+			}
+			.home-banner{
+				display: block;
+				padding: 12px 14px;
+				border-radius: 10px;
+				border: 1px solid #cbd5e1;
+				background: #eef5ff;
+				color: #1f2a37;
+				font-size: 30px;
+				text-decoration: none;
+				font-weight: 600;
+				letter-spacing: 0.2px;
+			}
 			.dir{
 				display: inline-block;
-				width: 400; 
+				width: calc(100% - 120px);
+				min-width: 0;
 				background: #FFDD88;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
 			}
 			.dir:hover{
 				background: #FFCC33;
 			}
 			.file{
 				display: inline-block;
-				width: 400; 
+				width: calc(100% - 120px);
+				min-width: 0;
 				background: #B3D1E7;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
 			}
 			.file:hover{
 				background: #336699;
@@ -41,12 +79,35 @@
 				border: 2px dashed #000;
 				background-color: rgba(200, 200, 200);
 			}
+			.toolbar-card,
+			.content-card{
+				background: #fff;
+				border: 1px solid #dbe3f2;
+				border-radius: 12px;
+				padding: 12px;
+				margin-bottom: 12px;
+			}
+			.content-card{
+				display: block;
+			}
+			.content-card > #list,
+			.content-card > #view,
+			.content-card > #edit{
+				background: #fff;
+				border: 1px solid #e4ebf7;
+				border-radius: 10px;
+				padding: 10px;
+				margin-bottom: 10px;
+			}
 		</style>
 	</head>
 	<body onload="read(currentPath)">
-		<h1> Explorer </h1>
+		<div class="top-nav">
+			<a class="home-banner" href="/manager/index.html">Explorer</a>
+		</div>
+		<main class="page-wrap">
 		
-		<div>
+		<div class="toolbar-card">
 			<button onclick="pathBack(currentPath)"> 上一頁 </button>
 			<label> DIR: </label> 
 			<input id="path" type="text" oninput="read(this.value)"/> 
@@ -54,7 +115,7 @@
 			<button onclick="download(currentPath)">下載當前項目</button>
 		</div>
 		
-		<div>
+		<div class="content-card">
 			<div id="list">
 				<button onclick="create(currentPath, 'dir')"> + 新資料夾</button>
 				<button onclick="create(currentPath, 'file')"> + 新文件</button>
@@ -73,6 +134,7 @@
 				<textarea></textarea>
 			</div>
 		</div>
+		</main>
 		
 		<form id="download" method="POST">
 			<input name="path" type="hidden">

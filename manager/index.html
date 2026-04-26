@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>SHV Home</title>
   <style>
     :root {
@@ -79,6 +82,7 @@
       background: linear-gradient(90deg, var(--accent), var(--accent-2));
       border-radius: 999px;
       padding: 4px 10px;
+      cursor: pointer;
     }
 
     .card h2 {
@@ -101,12 +105,27 @@
 
     <section class="grid">
       <a class="card" href="/manager/explorer.html">
-        <span class="badge">V3</span>
+        <span class="badge home-banner">V3</span>
         <h2>Explorer</h2>
         <p>單一版本入口（統一使用 type2/scan2/read2）。</p>
       </a>
+
+      <a class="card" href="/manager/tests.html">
+        <span class="badge home-banner">Tests</span>
+        <h2>API Tests</h2>
+        <p>逐行執行並顯示 file API 測試狀態，可直接編輯測試腳本。</p>
+      </a>
     </section>
   </main>
+  <script>
+    document.querySelectorAll(".home-banner").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = "/manager/index.html";
+      });
+    });
+  </script>
 </body>
 </html>
 

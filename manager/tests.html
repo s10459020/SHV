@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>API Test Workspace</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Manager API Tests</title>
   <style>
     body {
       margin: 0;
@@ -22,6 +25,26 @@
       padding: 16px;
       margin-bottom: 14px;
     }
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 9999;
+      background: #fff;
+      border-bottom: 1px solid #dbe3f2;
+      padding: 12px 14px;
+    }
+    .home-banner {
+      display: block;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      background: #eef5ff;
+      color: #1f2a37;
+      font-size: 30px;
+      text-decoration: none;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
     h1, h2 {
       margin: 0 0 10px;
     }
@@ -29,25 +52,346 @@
       color: #5b6b82;
       margin: 0;
     }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .row label {
+      font-size: 13px;
+      color: #334155;
+    }
+    .row input[type="number"] {
+      width: 110px;
+      border: 1px solid #c8d4ea;
+      border-radius: 8px;
+      padding: 6px 8px;
+      font: inherit;
+    }
+    button {
+      border: 1px solid #c8d4ea;
+      background: #fff;
+      border-radius: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      border: 1px solid #c8d4ea;
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .case-list {
+      border: 1px solid #dbe3f2;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .case-row {
+      padding: 10px 12px;
+      border-top: 1px solid #eef2f8;
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px;
+      background: #fff;
+    }
+    .case-row:first-child {
+      border-top: none;
+    }
+    .case-row.pending {
+      background: #fff;
+    }
+    .case-row.running {
+      background: #fff7dc;
+    }
+    .case-row.success {
+      background: #e9f9ee;
+    }
+    .case-row.fail {
+      background: #fdecec;
+    }
+    .status {
+      font-weight: 600;
+    }
+    .log {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #dbe3f2;
+      border-radius: 8px;
+      background: #fbfdff;
+      color: #334155;
+      white-space: pre-wrap;
+      font-family: ui-monospace, Consolas, "Courier New", monospace;
+      font-size: 12px;
+      min-height: 80px;
+    }
   </style>
 </head>
 <body>
+  <div class="top-nav">
+    <a class="home-banner" href="/manager/index.html">Tests</a>
+  </div>
   <main class="wrap">
     <section class="panel">
-      <h1>API Test Workspace</h1>
-      <p class="hint">這裡是 API 測試頁面骨架，尚未加入任何測試腳本。</p>
+      <h1>Manager API Tests</h1>
+      <p class="hint">逐行執行 file API 測試。預設底色 = 未執行，黃色 = 執行中，綠色 = 成功，紅色 = 失敗。</p>
+      <div class="row">
+        <button id="buildBtn" type="button">載入腳本</button>
+        <button id="runBtn" type="button">執行測試</button>
+        <button id="stepBtn" type="button">Step Run</button>
+        <label for="waitInput">Wait(ms)</label>
+        <input id="waitInput" type="number" min="0" step="50" value="300">
+      </div>
     </section>
 
-    <section class="panel" id="dir-test">
-      <h2>Directory API Tests</h2>
-      <p class="hint">預留：`scan_dir`、`create_dir`、`rename_dir`、`delete_dir`、`download_dir`。</p>
+    <section class="panel">
+      <h2>File Test Script (Editable)</h2>
+      <p class="hint">可直接修改以下 JSON。`$createdPath`、`$renamedPath` 會在執行過程自動帶入。</p>
+      <textarea id="scriptEditor"></textarea>
     </section>
 
-    <section class="panel" id="file-test">
-      <h2>File API Tests</h2>
-      <p class="hint">預留：`scan_file`、`read_file`、`write_file`、`create_file`、`rename_file`、`delete_file`、`download_file`、`upload_files`。</p>
+    <section class="panel">
+      <h2>Execution</h2>
+      <div id="caseList" class="case-list"></div>
+      <div id="log" class="log"></div>
     </section>
   </main>
+  <script>
+    const defaultScript = [
+      {
+        name: "create_file",
+        action: "create_file",
+        dir: "/"
+      },
+      {
+        name: "scan_file_after_create",
+        action: "scan_file_has_target",
+        path: "/",
+        targetPath: "$createdPath"
+      },
+      {
+        name: "write_file",
+        action: "write_file",
+        path: "$createdPath",
+        content: "api test content"
+      },
+      {
+        name: "read_file_contains_text",
+        action: "read_file_contains",
+        path: "$createdPath",
+        contains: "api test content"
+      },
+      {
+        name: "rename_file",
+        action: "rename_file",
+        path: "$createdPath",
+        newName: "api-test-renamed.txt"
+      },
+      {
+        name: "scan_file_after_rename",
+        action: "scan_file_has_target",
+        path: "/",
+        targetPath: "$renamedPath"
+      },
+      {
+        name: "delete_file",
+        action: "delete_file",
+        path: "$renamedPath"
+      }
+    ];
+
+    const scriptEditor = document.getElementById("scriptEditor");
+    const caseList = document.getElementById("caseList");
+    const logDom = document.getElementById("log");
+    const buildBtn = document.getElementById("buildBtn");
+    const runBtn = document.getElementById("runBtn");
+    const stepBtn = document.getElementById("stepBtn");
+    const waitInput = document.getElementById("waitInput");
+
+    let cases = [];
+    let stepIndex = 0;
+    let stepCtx = {};
+
+    scriptEditor.value = JSON.stringify(defaultScript, null, 2);
+
+    function log(msg) {
+      const now = new Date().toLocaleTimeString();
+      logDom.textContent += `[${now}] ${msg}\n`;
+      logDom.scrollTop = logDom.scrollHeight;
+    }
+
+    function setRowStatus(row, status, text) {
+      row.classList.remove("pending", "running", "success", "fail");
+      row.classList.add(status);
+      row.querySelector(".status").textContent = text;
+    }
+
+    function buildCases() {
+      caseList.innerHTML = "";
+      stepIndex = 0;
+      stepCtx = {};
+      let parsed;
+      try {
+        parsed = JSON.parse(scriptEditor.value);
+      } catch (e) {
+        log("腳本 JSON 格式錯誤: " + e.message);
+        return;
+      }
+      if (!Array.isArray(parsed)) {
+        log("腳本必須是陣列");
+        return;
+      }
+      cases = parsed.map((item) => {
+        const row = document.createElement("div");
+        row.className = "case-row pending";
+        row.innerHTML = `<div class="status">Pending</div><div>${item.name || item.action || "unnamed"}</div>`;
+        caseList.appendChild(row);
+        return { def: item, row: row };
+      });
+      log(`已載入 ${cases.length} 個測試`);
+    }
+
+    function resolveValue(v, ctx) {
+      if (typeof v !== "string") return v;
+      if (v === "$createdPath") return ctx.createdPath;
+      if (v === "$renamedPath") return ctx.renamedPath;
+      return v;
+    }
+
+    function basename(path) {
+      if (!path) return "";
+      const parts = String(path).replace(/\\/g, "/").split("/");
+      return parts[parts.length - 1] || "";
+    }
+
+    async function postForm(url, data) {
+      const body = new URLSearchParams();
+      Object.keys(data || {}).forEach((k) => {
+        if (data[k] !== undefined && data[k] !== null) body.append(k, String(data[k]));
+      });
+      const res = await fetch(url, { method: "POST", body });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      }
+      return text;
+    }
+
+    async function runCase(def, ctx) {
+      switch (def.action) {
+        case "create_file": {
+          const dir = resolveValue(def.dir, ctx);
+          const text = await postForm("/manager/api/file/create_file.php", { dir });
+          const m = text.match(/\[(.+?)\]/);
+          if (!m) throw new Error("無法從回應取得新檔案路徑: " + text);
+          ctx.createdPath = m[1];
+          return "created=" + ctx.createdPath;
+        }
+        case "scan_file_has_target": {
+          const path = resolveValue(def.path, ctx);
+          const targetPath = resolveValue(def.targetPath, ctx);
+          const targetName = basename(targetPath);
+          const text = await postForm("/manager/api/file/scan_file.php", { path });
+          const arr = JSON.parse(text || "[]");
+          if (!Array.isArray(arr) || !arr.includes(targetName)) {
+            throw new Error("掃描結果找不到目標檔案: " + targetName);
+          }
+          return "found=" + targetName;
+        }
+        case "write_file": {
+          const path = resolveValue(def.path, ctx);
+          const content = resolveValue(def.content, ctx);
+          await postForm("/manager/api/file/write_file.php", { path, content });
+          return "written=" + path;
+        }
+        case "read_file_contains": {
+          const path = resolveValue(def.path, ctx);
+          const contains = resolveValue(def.contains, ctx);
+          const text = await postForm("/manager/api/file/read_file.php", { path });
+          if (!text.includes(contains)) {
+            throw new Error("內容不包含目標文字: " + contains);
+          }
+          return "verified=" + path;
+        }
+        case "rename_file": {
+          const path = resolveValue(def.path, ctx);
+          const newName = resolveValue(def.newName, ctx);
+          const text = await postForm("/manager/api/file/rename_file.php", { path, name: newName });
+          const m = text.match(/to \[(.+?)\]/);
+          if (!m) throw new Error("無法從回應取得更名後路徑: " + text);
+          ctx.renamedPath = m[1];
+          return "renamed=" + ctx.renamedPath;
+        }
+        case "delete_file": {
+          const path = resolveValue(def.path, ctx);
+          await postForm("/manager/api/file/delete_file.php", { path });
+          return "deleted=" + path;
+        }
+        default:
+          throw new Error("未知 action: " + def.action);
+      }
+    }
+
+    async function runAll() {
+      if (!cases.length) {
+        log("請先按「載入腳本」");
+        return;
+      }
+      stepIndex = 0;
+      stepCtx = {};
+      const ctx = {};
+      const waitMs = Math.max(0, Number(waitInput.value || 0));
+      for (const c of cases) {
+        setRowStatus(c.row, "running", "Running");
+        try {
+          const result = await runCase(c.def, ctx);
+          setRowStatus(c.row, "success", "Success");
+          log(`${c.def.name || c.def.action}: ${result}`);
+          if (waitMs > 0) {
+            await new Promise((r) => setTimeout(r, waitMs));
+          }
+        } catch (e) {
+          setRowStatus(c.row, "fail", "Fail");
+          log(`${c.def.name || c.def.action}: ${e.message}`);
+          break;
+        }
+      }
+    }
+
+    async function runStep() {
+      if (!cases.length) {
+        log("請先按「載入腳本」");
+        return;
+      }
+      if (stepIndex >= cases.length) {
+        log("Step Run 已完成，重新載入腳本可重跑。");
+        return;
+      }
+      const c = cases[stepIndex];
+      setRowStatus(c.row, "running", "Running");
+      try {
+        const result = await runCase(c.def, stepCtx);
+        setRowStatus(c.row, "success", "Success");
+        log(`${c.def.name || c.def.action}: ${result}`);
+        stepIndex += 1;
+      } catch (e) {
+        setRowStatus(c.row, "fail", "Fail");
+        log(`${c.def.name || c.def.action}: ${e.message}`);
+      }
+    }
+
+    buildBtn.addEventListener("click", buildCases);
+    runBtn.addEventListener("click", runAll);
+    stepBtn.addEventListener("click", runStep);
+    buildCases();
+  </script>
 </body>
 </html>
-
