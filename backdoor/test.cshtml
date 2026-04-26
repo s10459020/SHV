@@ -1,0 +1,31 @@
+@{
+    var name = "John";
+    var age = 25;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Razor Page</title>
+</head>
+<body>
+    <h1>Welcome, @name!</h1>
+    <p>You are @age years old.</p>
+    
+    @if (age >= 18)
+    {
+        <p>You are an adult.</p>
+    }
+    else
+    {
+        <p>You are a minor.</p>
+    }
+    
+    <ul>
+        @for (var i = 1; i <= 5; i++)
+        {
+            <li>Item @i</li>
+        }
+    </ul>
+</body>
+</html>
