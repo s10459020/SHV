@@ -6,12 +6,26 @@
 		<meta http-equiv="Pragma" content="no-cache">
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 		<script src="https://code.jquery.com/jquery.min.js"></script>
+		<script src="/manager/js/preview/markdown_preview.js"></script>
 		<style>
+			:root{
+				--bg: #f2f5fb;
+				--card: #ffffff;
+				--line: #d7e2f3;
+				--text: #1f2a37;
+				--muted: #58657a;
+				--primary: #1d4ed8;
+				--primary-soft: #e8f0ff;
+				--dir-bg: #fff4cc;
+				--dir-bd: #f2d57a;
+				--file-bg: #e8f2fc;
+				--file-bd: #b8d2ef;
+			}
 			body{
 				margin: 0;
 				font-family: "Segoe UI", "Noto Sans TC", sans-serif;
-				background: #f6f8fb;
-				color: #1f2a37;
+				background: radial-gradient(1200px 500px at 20% -10%, #e9f2ff, transparent), var(--bg);
+				color: var(--text);
 			}
 			.page-wrap{
 				width: min(1080px, 94%);
@@ -21,83 +35,166 @@
 				position: sticky;
 				top: 0;
 				z-index: 9999;
-				background: #ffffff;
-				border-bottom: 1px solid #dbe3f2;
+				background: rgba(255,255,255,.92);
+				backdrop-filter: blur(8px);
+				border-bottom: 1px solid var(--line);
 				padding: 12px 14px;
 			}
 			.home-banner{
 				display: block;
 				padding: 12px 14px;
 				border-radius: 10px;
-				border: 1px solid #cbd5e1;
-				background: #eef5ff;
-				color: #1f2a37;
+				border: 1px solid var(--line);
+				background: linear-gradient(135deg, #eef5ff, #f8fbff);
+				color: var(--text);
 				font-size: 30px;
 				text-decoration: none;
 				font-weight: 600;
 				letter-spacing: 0.2px;
 			}
-			.dir{
-				display: inline-block;
-				width: calc(100% - 120px);
-				min-width: 0;
-				background: #FFDD88;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-			}
-			.dir:hover{
-				background: #FFCC33;
-			}
-			.file{
-				display: inline-block;
-				width: calc(100% - 120px);
-				min-width: 0;
-				background: #B3D1E7;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-			}
-			.file:hover{
-				background: #336699;
-			}
 			#view > iframe{
 				width: 100%;
-				height: 100%;
+				height: 360px;
+				display: block;
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				background: #fff;
 			}
 			#edit > textarea{
 				width: 100%;
-				height: 100%;
+				height: 360px;
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				padding: 10px;
+				box-sizing: border-box;
+				font-family: ui-monospace, Consolas, "Courier New", monospace;
 			}
 			#drop{
 				position: relative;
-				border: 2px dashed #ccc;
-				background-color: rgba(255, 255, 255);
-				min-height: 50px
+				border: 2px dashed #c8d4ea;
+				background: #fafdff;
+				min-height: 80px;
+				list-style: none;
+				padding: 8px;
+				margin: 8px 0 0;
+				border-radius: 12px;
 			}
 			#drop.cover{
-				border: 2px dashed #000;
-				background-color: rgba(200, 200, 200);
+				border: 2px dashed var(--primary);
+				background: #eaf2ff;
 			}
 			.toolbar-card,
 			.content-card{
-				background: #fff;
-				border: 1px solid #dbe3f2;
-				border-radius: 12px;
-				padding: 12px;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 14px;
+				padding: 14px;
 				margin-bottom: 12px;
+				box-shadow: 0 4px 18px rgba(21,42,88,.04);
+			}
+			.toolbar-card{
+				display: grid;
+				gap: 10px;
+			}
+			.toolbar-actions{
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+			}
+			.path-row{
+				display: flex;
+				gap: 8px;
+				align-items: center;
+			}
+			.path-row input{
+				flex: 1;
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				padding: 9px 10px;
+				font-size: 14px;
+			}
+			.breadcrumb{
+				display: flex;
+				flex-wrap: wrap;
+				gap: 6px;
+				padding: 8px;
+				border: 1px dashed var(--line);
+				border-radius: 10px;
+				background: #fbfdff;
+			}
+			.breadcrumb button{
+				padding: 4px 8px;
+				font-size: 12px;
+				border-radius: 999px;
+				background: var(--primary-soft);
+				border-color: #c9dbff;
+				color: #15306c;
 			}
 			.content-card{
-				display: block;
+				display: grid;
+				gap: 10px;
 			}
-			.content-card > #list,
-			.content-card > #view,
-			.content-card > #edit{
+			.panel{
 				background: #fff;
 				border: 1px solid #e4ebf7;
-				border-radius: 10px;
+				border-radius: 12px;
 				padding: 10px;
-				margin-bottom: 10px;
+				overflow: hidden;
+			}
+			button{
+				border: 1px solid #c8d4ea;
+				background: #fff;
+				border-radius: 9px;
+				padding: 7px 11px;
+				cursor: pointer;
+				transition: .18s ease;
+			}
+			button:hover{
+				transform: translateY(-1px);
+				border-color: #9bb4de;
+				box-shadow: 0 3px 10px rgba(21,42,88,.08);
+			}
+			#drop li{
+				display: grid;
+				grid-template-columns: 1fr auto auto;
+				gap: 8px;
+				align-items: center;
+				margin-bottom: 8px;
+				padding: 8px;
+				border-radius: 10px;
+				border: 1px solid transparent;
+			}
+			#drop li:hover{
+				border-color: var(--line);
+				background: #fbfdff;
+			}
+			.item-name{
+				display: inline-block;
+				min-width: 0;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				padding: 7px 9px;
+				border-radius: 8px;
+				border: 1px solid transparent;
+			}
+			.item-name.dir{
+				background: var(--dir-bg);
+				border-color: var(--dir-bd);
+				font-weight: 600;
+			}
+			.item-name.file{
+				background: var(--file-bg);
+				border-color: var(--file-bd);
+			}
+			.item-name:hover{
+				filter: brightness(.98);
+			}
+			.panel-title{
+				margin: 0 0 8px;
+				font-size: 14px;
+				color: var(--muted);
+				font-weight: 600;
 			}
 		</style>
 	</head>
@@ -108,30 +205,35 @@
 		<main class="page-wrap">
 		
 		<div class="toolbar-card">
-			<button onclick="pathBack(currentPath)"> 上一頁 </button>
-			<button onclick="resetExplorer()">重置</button>
-			<label> DIR: </label> 
-			<input id="path" type="text" oninput="read(this.value)"/> 
-			<button onclick="read(currentPath+'/..')"> .. </button>
-			<button onclick="download(currentPath)">下載當前項目</button>
+			<div class="toolbar-actions">
+				<button onclick="pathBack(currentPath)">上一頁</button>
+				<button onclick="read(currentPath+'/..')">上層</button>
+				<button onclick="resetExplorer()">重置</button>
+				<button onclick="download(currentPath)">下載當前項目</button>
+			</div>
+			<div class="path-row">
+				<label for="path">路徑</label>
+				<input id="path" type="text" onkeydown="onPathEnter(event)" onblur="read(this.value)"/>
+			</div>
+			<div id="breadcrumb" class="breadcrumb"></div>
 		</div>
 		
 		<div class="content-card">
-			<div id="list">
+			<div id="list" class="panel">
+				<p class="panel-title">檔案清單 (可拖放上傳)</p>
 				<button onclick="create(currentPath, 'dir')"> + 新資料夾</button>
 				<button onclick="create(currentPath, 'file')"> + 新文件</button>
-				<br/>
 				<ul id="drop" draggable="true"></ul>
 			</div>
-			<div id="view">
+			<div id="view" class="panel">
+				<p class="panel-title">預覽</p>
 				<button onclick="edit(currentPath)">編輯</button>
-				<br/>
 				<iframe id="frame"></iframe>
 			</div>
-			<div id="edit">
+			<div id="edit" class="panel">
+				<p class="panel-title">編輯器</p>
 				<button onclick="save(currentPath)">儲存</button>
 				<button onclick="read(currentPath)">取消</button>
-				<br/>
 				<textarea></textarea>
 			</div>
 		</div>
@@ -228,6 +330,27 @@
 				let dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
 				return dirPath
 			}
+			function onPathEnter(event){
+				if(event.key === 'Enter'){
+					read(event.target.value);
+				}
+			}
+			function renderBreadcrumb(path){
+				const dom = $('#breadcrumb');
+				dom.empty();
+				const segs = normalizePath(path).split('/').filter(Boolean);
+				const rootBtn = $('<button type="button">/</button>');
+				rootBtn.on('click', () => read('/'));
+				dom.append(rootBtn);
+				let acc = '';
+				segs.forEach((seg) => {
+					acc += '/' + seg;
+					const btn = $(`<button type="button">${seg}</button>`);
+					const target = acc;
+					btn.on('click', () => read(target));
+					dom.append(btn);
+				});
+			}
 
 			function initialDrop(){
 				let dropDom = $('#drop')
@@ -295,6 +418,7 @@
 				currentPath = path
 				saveCurrentPath(path)
 				pathDom.val(path)
+				renderBreadcrumb(path)
 				console.log(path)
 				
 				let type = await $.post(typeApi, {path: path})
@@ -336,7 +460,7 @@
 						item[0].path = joinPath(path, dir)
 						item[0].type = 'dir'
 						item.find('span').text(dir)
-						item.find('span').addClass('dir')
+						item.find('span').addClass('item-name dir')
 						item.find('span').dblclick(() => {
 							read(joinPath(path, dir));
 						})
@@ -349,7 +473,7 @@
 						item[0].path = joinPath(path, file)
 						item[0].type = 'file'
 						item.find('span').text(file)
-						item.find('span').addClass('file')
+						item.find('span').addClass('item-name file')
 						item.find('span').dblclick(() => {
 							read(joinPath(path, file));
 						})
@@ -360,15 +484,33 @@
 			
 			function readFile(path){
 				let viewDom = $('#view').find('iframe')
-				$.post(fileReadApi, { path: path })
-					.done((res) => {
-						const safe = escapeHtml(res ?? '');
-						viewDom[0].srcdoc = `<pre style="margin:0;padding:12px;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,'Courier New',monospace;font-size:13px;">${safe}</pre>`;
-					})
-					.fail((xhr) => {
-						const msg = escapeHtml(xhr?.responseText || `${xhr.status} ${xhr.statusText}`);
-						viewDom[0].srcdoc = `<pre style="margin:0;padding:12px;color:#b91c1c;white-space:pre-wrap;">read failed: ${msg}</pre>`;
-					});
+				if (/\.md$/i.test(path)) {
+					$.post(fileReadApi, { path: path })
+						.done((res) => {
+							const html = window.MarkdownPreview
+								? window.MarkdownPreview.renderToHtml(res ?? '')
+								: `<pre>${escapeHtml(res ?? '')}</pre>`;
+							viewDom[0].srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+								*{box-sizing:border-box}
+								body{font-family:Segoe UI,Noto Sans TC,sans-serif;line-height:1.6;color:#1f2a37;padding:14px;margin:0}
+								h1,h2,h3,h4,h5,h6{margin:0 0 10px;line-height:1.35}
+								p{margin:0 0 10px}
+								ul{margin:0 0 10px 0;padding-left:1.1em}
+								li{margin:2px 0 0}
+								pre{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;overflow:auto}
+								pre{margin:0 0 10px}
+								code{background:#f1f5f9;border-radius:6px;padding:1px 5px}
+								a{color:#1d4ed8}
+							</style></head><body>${html}</body></html>`;
+						})
+						.fail((xhr) => {
+							const msg = escapeHtml(xhr?.responseText || `${xhr.status} ${xhr.statusText}`);
+							viewDom[0].srcdoc = `<pre style="color:#b91c1c;padding:12px">read failed: ${msg}</pre>`;
+						});
+					return;
+				}
+				viewDom.attr('srcdoc', '');
+				viewDom.attr('src', path);
 			}
 			
 			function edit(path){
