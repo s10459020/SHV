@@ -1,0 +1,112 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SHV Home</title>
+  <style>
+    :root {
+      --bg-1: #f4efe6;
+      --bg-2: #dfe9f5;
+      --card: #ffffff;
+      --text: #1f2a37;
+      --muted: #526070;
+      --line: #d7deea;
+      --accent: #1f6feb;
+      --accent-2: #0f4fb8;
+      --shadow: 0 12px 32px rgba(20, 39, 77, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Noto Sans TC", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 12% 10%, #fff7dd 0%, transparent 60%),
+        radial-gradient(700px 420px at 88% 16%, #dcefff 0%, transparent 55%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+    }
+
+    .wrap {
+      width: min(1080px, 92%);
+      margin: 42px auto;
+    }
+
+    .title {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 5vw, 44px);
+      letter-spacing: 0.2px;
+    }
+
+    .subtitle {
+      margin: 0 0 28px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: #b9c8e2;
+      box-shadow: 0 16px 38px rgba(20, 39, 77, 0.2);
+    }
+
+    .badge {
+      display: inline-block;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #ffffff;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1 class="title">SHV Homepage</h1>
+    <p class="subtitle">選擇要進入的功能頁面</p>
+
+    <section class="grid">
+      <a class="card" href="/manager/explorer.html">
+        <span class="badge">V3</span>
+        <h2>Explorer</h2>
+        <p>單一版本入口（統一使用 type2/scan2/read2）。</p>
+      </a>
+    </section>
+  </main>
+</body>
+</html>
+
