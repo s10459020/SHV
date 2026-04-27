@@ -518,7 +518,7 @@
 						break;
 					case 'file':
 						saveCurrentPath(parentDir(path))
-						window.location.href = `/manager/preview.html?path=${encodeURIComponent(path)}`;
+						window.location.href = `/manager/preview.html?path=${encodeURIComponent(path)}&from=explorer`;
 						break;
 				}
 			}
@@ -750,7 +750,7 @@
 			}
 
 			function openDiff(path){
-				window.location.href = `/manager/diff.html?base=${encodeURIComponent(path)}`;
+				window.location.href = `/manager/diff.html?base=${encodeURIComponent(path)}&fresh=1`;
 			}
 			
 			async function drop(dataTransfer, targetPath = currentPath){

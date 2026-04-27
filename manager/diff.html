@@ -24,11 +24,14 @@
     .list-box{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;min-height:440px}
     .list-head{padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px}
     .head-actions{display:flex;gap:8px}
-    .items{max-height:560px;overflow:auto;padding:8px 10px}
+    .items{padding:8px 10px}
+    .left-box .items{max-height:none;overflow:visible}
     .right-box .items{max-height:none;min-height:420px;border:2px dashed #b8cae8;border-radius:10px;margin:10px 12px;background:#f8fbff}
     .right-box.drag .items{border-color:#1d4ed8;background:#eaf2ff}
     .drop-hint{height:100%;min-height:390px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);padding:12px}
     .item{padding:7px 9px;border-radius:8px;border:1px solid transparent;margin-bottom:6px;font-family:ui-monospace,Consolas,monospace;font-size:13px;display:flex;justify-content:space-between;gap:10px}
+    .file-chip{display:inline-block;padding:3px 6px;border-radius:6px;cursor:pointer}
+    .file-chip:hover{background:#eef5ff}
     .meta{color:#58657a;font-family:"Segoe UI","Noto Sans TC",sans-serif;font-size:12px;white-space:nowrap}
     .mark-remove{background:var(--red)} .mark-update{background:var(--yellow)} .mark-add{background:var(--green)} .muted{color:var(--muted)}
     @media (max-width: 900px){.grid{grid-template-columns:1fr}}
@@ -52,7 +55,7 @@
     </section>
 
     <section class="grid">
-      <article class="panel list-box">
+      <article class="panel list-box left-box">
         <div class="list-head">
           <span>當前資料夾檔案列表</span>
           <span class="head-actions"><button id="btnDownload">下載</button></span>
@@ -76,6 +79,8 @@
   <script>
     const qs = new URLSearchParams(location.search);
     const basePath = decodeURIComponent(qs.get('base') || '/');
+    const restore = String(qs.get('restore') || '') === '1';
+    const fresh = String(qs.get('fresh') || '') === '1';
     const baseFolderName = (() => {
       const n = String(basePath || '').replace(/\\/g, '/').replace(/\/+$/, '');
       const segs = n.split('/').filter(Boolean);
@@ -89,6 +94,7 @@
 
     let leftFiles = [];
     let rightFiles = [];
+    const DIFF_STATE_COOKIE = 'manager_diff_state_v1';
 
     const normalizeRel = (p) => String(p || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/');
     const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : '';
@@ -116,6 +122,53 @@
       const i = p.lastIndexOf('/');
       return i >= 0 ? p.slice(i + 1) : p;
     };
+    function setCookie(name, value, days = 1){
+      const d = new Date();
+      d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/; SameSite=Lax`;
+    }
+    function getCookie(name){
+      const key = `${name}=`;
+      const arr = document.cookie.split(';');
+      for (const raw of arr){
+        const c = raw.trim();
+        if (c.startsWith(key)) return decodeURIComponent(c.substring(key.length));
+      }
+      return '';
+    }
+    function saveDiffState(){
+      // cookie only stores metadata; file objects remain only in-memory
+      const payload = {
+        base: basePath,
+        right: rightFiles.map(r => ({ path: r.path, mtimeMs: r.mtimeMs }))
+      };
+      const txt = JSON.stringify(payload);
+      if (txt.length <= 3500) setCookie(DIFF_STATE_COOKIE, txt, 1);
+    }
+    function clearDiffState(){
+      document.cookie = `${DIFF_STATE_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+    }
+    function loadDiffState(){
+      const txt = getCookie(DIFF_STATE_COOKIE);
+      if (!txt) return;
+      try{
+        const data = JSON.parse(txt);
+        if (data?.base !== basePath || !Array.isArray(data?.right)) return;
+        rightFiles = data.right
+          .filter(x => x && typeof x.path === 'string')
+          .map(x => ({ path: normalizeRel(x.path), mtimeMs: Number(x.mtimeMs || 0) }));
+      }catch(_){}
+    }
+    function openPreviewFromDiff(absPath){
+      const u = `/manager/preview.html?path=${encodeURIComponent(absPath)}&from=diff&base=${encodeURIComponent(basePath)}&restore=1`;
+      location.href = u;
+    }
+    function openPreviewBlob(fileObj){
+      const blobUrl = URL.createObjectURL(fileObj);
+      const name = fileObj?.name || 'local-file';
+      const u = `/manager/preview.html?blob=${encodeURIComponent(blobUrl)}&name=${encodeURIComponent(name)}&from=diff&base=${encodeURIComponent(basePath)}&restore=1`;
+      location.href = u;
+    }
 
     function classify(path) {
       const l = leftFiles.find(x => x.path === path);
@@ -156,7 +209,7 @@
       rightDom.empty();
 
       if (rightFiles.length === 0) {
-        leftFiles.forEach(f => leftDom.append(`<div class="item"><span>${f.path}</span><span class="meta">${fmtTime(f.mtimeMs)}</span></div>`));
+        leftFiles.forEach(f => leftDom.append(`<div class="item"><span class="file-chip pv-link-left" data-rel="${encodeURIComponent(f.path)}">${f.path}</span><span class="meta">${fmtTime(f.mtimeMs)}</span></div>`));
         rightDom.append('<div class="drop-hint">把檔案/資料夾拖到這個區塊（只讀取資訊，不上傳）</div>');
         return;
       }
@@ -164,8 +217,8 @@
       const rows = getDiffRows();
       rows.forEach((row) => {
         const c = classify(row.path);
-        if (row.left) leftDom.append(`<div class="item ${c.left}"><a class="pv-link" data-rel="${encodeURIComponent(row.left.path)}" href="#">${row.left.path}</a><span class="meta">${fmtTime(row.left.mtimeMs)}</span></div>`);
-        if (row.right) rightDom.append(`<div class="item ${c.right}"><span>${row.right.path}</span><span class="meta">${fmtTime(row.right.mtimeMs)}</span></div>`);
+        if (row.left) leftDom.append(`<div class="item ${c.left}"><span class="file-chip pv-link-left" data-rel="${encodeURIComponent(row.left.path)}">${row.left.path}</span><span class="meta">${fmtTime(row.left.mtimeMs)}</span></div>`);
+        if (row.right) rightDom.append(`<div class="item ${c.right}"><span class="file-chip pv-link-right" data-rel="${encodeURIComponent(row.right.path)}">${row.right.path}</span><span class="meta">${fmtTime(row.right.mtimeMs)}</span></div>`);
       });
     }
 
@@ -228,6 +281,7 @@
       e.stopPropagation();
       $('#rightPanel').removeClass('drag');
       rightFiles = await collectDropped(e.originalEvent.dataTransfer);
+      saveDiffState();
       render();
     }
 
@@ -255,6 +309,10 @@
       const rows = getDiffRows();
       const toUpload = rows.filter(r => r.state === 'add' || r.state === 'right_newer');
       const toDelete = rows.filter(r => r.state === 'remove');
+      const missingSource = toUpload.filter(r => !r.right?.file);
+      if (missingSource.length > 0) {
+        throw new Error('缺少可上傳的來源檔案內容，請重新拖曳來源後再上傳');
+      }
 
       const fd = new FormData();
       let uploadCount = 0;
@@ -298,6 +356,7 @@
       }
 
       await loadLeft();
+      saveDiffState();
       alert(`上傳套用完成：上傳 ${uploadCount} 筆，刪除 ${toDelete.length} 筆`);
     }
 
@@ -323,15 +382,35 @@
     $('#btnDownload').on('click', () => {
       runDownloadExport().catch(err => alert('下載輸出失敗: ' + (err?.message || err)));
     });
-    $('#leftItems').on('click', '.pv-link', (e) => {
+    $('#leftItems').on('click', '.pv-link-left', (e) => {
       e.preventDefault();
       const rel = decodeURIComponent(String($(e.currentTarget).attr('data-rel') || ''));
       const sub = stripBasePrefix(rel);
       const abs = sub ? `${basePath}/${sub}` : basePath;
-      location.href = `/manager/preview.html?path=${encodeURIComponent(abs)}`;
+      openPreviewFromDiff(abs);
+    });
+    $('#rightItems').on('click', '.pv-link-right', (e) => {
+      e.preventDefault();
+      const rel = decodeURIComponent(String($(e.currentTarget).attr('data-rel') || ''));
+      const item = rightFiles.find(x => x.path === rel);
+      if (item?.file) {
+        openPreviewBlob(item.file);
+        return;
+      }
+      const sub = stripBasePrefix(rel);
+      const abs = sub ? `${basePath}/${sub}` : basePath;
+      openPreviewFromDiff(abs);
     });
 
     initDrop();
+    if (fresh) {
+      clearDiffState();
+      const nqs = new URLSearchParams(location.search);
+      nqs.delete('fresh');
+      const next = location.pathname + (nqs.toString() ? ('?' + nqs.toString()) : '');
+      history.replaceState(null, '', next);
+    }
+    if (restore || !fresh) loadDiffState();
     loadLeft().catch(err => { $('#leftItems').html(`<div class="muted">load fail: ${String(err)}</div>`); });
   </script>
 </body>

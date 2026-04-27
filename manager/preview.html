@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
@@ -28,7 +28,7 @@
   <div class="top-nav"><a class="home-banner" href="/manager/index.html">Preview</a></div>
   <main class="wrap">
     <section class="toolbar">
-      <button id="btnBack">回 Explorer</button>
+      <button id="btnBack">返回</button>
       <span class="muted">Path:</span>
       <span id="pathText" class="path"></span>
     </section>
@@ -39,16 +39,34 @@
   <script>
     const q = new URLSearchParams(location.search);
     const path = decodeURIComponent(q.get('path') || '/');
+    const blob = decodeURIComponent(q.get('blob') || '');
+    const name = decodeURIComponent(q.get('name') || '');
+    const from = String(q.get('from') || 'explorer');
+    const diffBase = decodeURIComponent(q.get('base') || '');
+    const restore = String(q.get('restore') || '') === '1';
+
     const fileReadApi = '/manager/api/file/read_file.php';
     const filePreviewApi = '/manager/api/file/preview_file.php';
-    $('#pathText').text(path);
+    $('#pathText').text(blob ? (`[local] ${name || path}`) : path);
+
     function parentDir(p){
       const s = String(p || '').replace(/\\/g, '/');
       const i = s.lastIndexOf('/');
       if (i <= 0) return '/';
       return s.slice(0, i);
     }
+
     $('#btnBack').on('click', () => {
+      if (from === 'diff') {
+        if (document.referrer && document.referrer.includes('/manager/diff.html')) {
+          history.back();
+          return;
+        }
+        const b = diffBase || parentDir(path);
+        const r = restore ? '&restore=1' : '';
+        location.href = '/manager/diff.html?base=' + encodeURIComponent(b) + r;
+        return;
+      }
       location.href = '/manager/explorer.html?path=' + encodeURIComponent(parentDir(path));
     });
 
@@ -63,10 +81,14 @@
 
     function render(){
       const frame = $('#frame')[0];
-      const previewUrl = `${filePreviewApi}?path=${encodeURIComponent(path)}`;
-      if (/\.md$/i.test(path)) {
-        $.post(fileReadApi, { path })
-          .done((res) => {
+      const previewUrl = blob || `${filePreviewApi}?path=${encodeURIComponent(path)}`;
+      const targetName = (name || path || '').toLowerCase();
+      if (/\.md$/i.test(targetName)) {
+        const loadMd = blob
+          ? fetch(previewUrl).then(r => r.text())
+          : $.post(fileReadApi, { path }).then((x) => x);
+        Promise.resolve(loadMd)
+          .then((res) => {
             const html = window.MarkdownPreview
               ? window.MarkdownPreview.renderToHtml(res ?? '')
               : `<pre>${escapeHtml(res ?? '')}</pre>`;
@@ -83,12 +105,12 @@
               a{color:#1d4ed8}
             </style></head><body>${html}</body></html>`;
           })
-          .fail((xhr) => {
-            frame.srcdoc = `<pre style="color:#b91c1c;padding:12px">read failed: ${escapeHtml(xhr?.responseText || xhr?.statusText || '')}</pre>`;
+          .catch((xhr) => {
+            frame.srcdoc = `<pre style="color:#b91c1c;padding:12px">read failed: ${escapeHtml(xhr?.responseText || xhr?.statusText || xhr?.message || '')}</pre>`;
           });
         return;
       }
-      if (/\.(gif|png|jpe?g|webp|bmp|svg|ico)$/i.test(path)) {
+      if (/\.(gif|png|jpe?g|webp|bmp|svg|ico)$/i.test(targetName)) {
         frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
           html,body{margin:0;height:100%;background:#f8fafc}
           .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
@@ -96,7 +118,7 @@
         </style></head><body><div class="wrap"><img src="${previewUrl}" alt="preview"></div></body></html>`;
         return;
       }
-      if (/\.(mov|mp4|webm|ogg)$/i.test(path)) {
+      if (/\.(mov|mp4|webm|ogg)$/i.test(targetName)) {
         frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
           html,body{margin:0;height:100%;background:#f8fafc}
           .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
