@@ -61,12 +61,9 @@ function normalize_joined(string $input): string {
 }
 
 function ensure_in_root(string $path): string {
-    $root = root_dir();
     $n = rtrim(str_replace('\\', '/', $path), '/');
+    if (preg_match('/^[A-Za-z]:$/', $n)) $n .= '/';
     if ($n === '') $n = '/';
-    if (!str_starts_with(strtolower($n . '/'), strtolower($root . '/')) && strtolower($n) !== strtolower($root)) {
-        tres('Path out of workspace root', 403);
-    }
     return $n;
 }
 
@@ -78,5 +75,16 @@ function rel_from_root(string $abs): string {
     $root = root_dir();
     $abs = str_replace('\\', '/', $abs);
     if (strtolower($abs) === strtolower($root)) return '/';
+    if (!str_starts_with(strtolower($abs . '/'), strtolower($root . '/'))) {
+        return $abs;
+    }
     return '/' . ltrim(substr($abs, strlen($root)), '/');
+}
+
+function path_join(string $base, string $name): string {
+    $base = str_replace('\\', '/', $base);
+    if (preg_match('/^[A-Za-z]:\/$/', $base) || $base === '/') {
+        return $base . ltrim($name, '/');
+    }
+    return rtrim($base, '/') . '/' . ltrim($name, '/');
 }

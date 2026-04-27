@@ -104,9 +104,25 @@ function save(path) {
 }
 
 function create(path, type) {
-  const u = type === 'dir' ? api.dirCreate : api.fileCreate;
-  const payload = type === 'dir' ? { dir: path } : { dir: path };
-  $.post(u, payload).done(() => read(currentPath));
+  const isDir = type === 'dir';
+  const baseName = isDir ? 'new-folder' : 'new-file';
+  const input = prompt(`請輸入${isDir ? '資料夾' : '文件'}名稱（留空使用預設）`, baseName);
+  if (input === null) return;
+  const custom = String(input || '').trim();
+  const u = isDir ? api.dirCreate : api.fileCreate;
+  const tryCreate = (idx) => {
+    const name = custom || (idx <= 1 ? baseName : `${baseName}(${idx})`);
+    $.post(u, { dir: path, name })
+      .done(() => read(currentPath))
+      .fail((xhr) => {
+        if (!custom && xhr?.status === 409 && idx < 999) {
+          tryCreate(idx + 1);
+          return;
+        }
+        alert(xhr?.responseText || `${xhr.status} ${xhr.statusText}`);
+      });
+  };
+  tryCreate(1);
 }
 
 function rename(path, type) {

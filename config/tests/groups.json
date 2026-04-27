@@ -15,6 +15,11 @@
     "configUrl": "/config/tests/absolute_api_tests.json"
   },
   {
+    "id": "disk_path",
+    "title": "Disk Path",
+    "configUrl": "/config/tests/disk_path_tests.json"
+  },
+  {
     "id": "transfer_api",
     "title": "Transfer API",
     "configUrl": "/config/tests/transfer_api_tests.json"

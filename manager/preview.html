@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Preview</title>
+  <script src="https://code.jquery.com/jquery.min.js"></script>
+  <script src="/manager/js/preview/markdown_preview.js"></script>
+  <style>
+    :root{--bg:#f2f5fb;--card:#fff;--line:#d7e2f3;--text:#1f2a37;--muted:#58657a}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Segoe UI","Noto Sans TC",sans-serif;background:var(--bg);color:var(--text)}
+    .top-nav{position:sticky;top:0;z-index:1000;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 14px}
+    .home-banner{display:block;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:linear-gradient(135deg,#eef5ff,#f8fbff);color:var(--text);font-size:30px;text-decoration:none;font-weight:600}
+    .wrap{width:min(1200px,94%);margin:18px auto 24px}
+    .toolbar,.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .path{font-family:ui-monospace,Consolas,monospace;color:#234;word-break:break-all}
+    #frame{width:100%;height:72vh;border:1px solid var(--line);border-radius:10px;background:#fff}
+    .muted{color:var(--muted)}
+    button{border:1px solid #c8d4ea;background:#fff;border-radius:9px;padding:7px 11px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="top-nav"><a class="home-banner" href="/manager/index.html">Preview</a></div>
+  <main class="wrap">
+    <section class="toolbar">
+      <button id="btnBack">回 Explorer</button>
+      <span class="muted">Path:</span>
+      <span id="pathText" class="path"></span>
+    </section>
+    <section class="panel">
+      <iframe id="frame"></iframe>
+    </section>
+  </main>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const path = decodeURIComponent(q.get('path') || '/');
+    const fileReadApi = '/manager/api/file/read_file.php';
+    const filePreviewApi = '/manager/api/file/preview_file.php';
+    $('#pathText').text(path);
+    function parentDir(p){
+      const s = String(p || '').replace(/\\/g, '/');
+      const i = s.lastIndexOf('/');
+      if (i <= 0) return '/';
+      return s.slice(0, i);
+    }
+    $('#btnBack').on('click', () => {
+      location.href = '/manager/explorer.html?path=' + encodeURIComponent(parentDir(path));
+    });
+
+    function escapeHtml(text){
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function render(){
+      const frame = $('#frame')[0];
+      const previewUrl = `${filePreviewApi}?path=${encodeURIComponent(path)}`;
+      if (/\.md$/i.test(path)) {
+        $.post(fileReadApi, { path })
+          .done((res) => {
+            const html = window.MarkdownPreview
+              ? window.MarkdownPreview.renderToHtml(res ?? '')
+              : `<pre>${escapeHtml(res ?? '')}</pre>`;
+            frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+              *{box-sizing:border-box}
+              body{font-family:Segoe UI,Noto Sans TC,sans-serif;line-height:1.6;color:#1f2a37;padding:14px;margin:0}
+              h1,h2,h3,h4,h5,h6{margin:0 0 10px;line-height:1.35}
+              p{margin:0 0 10px}
+              ul{margin:0 0 10px 0;padding-left:1.1em}
+              li{margin:2px 0 0}
+              pre{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;overflow:auto}
+              pre{margin:0 0 10px}
+              code{background:#f1f5f9;border-radius:6px;padding:1px 5px}
+              a{color:#1d4ed8}
+            </style></head><body>${html}</body></html>`;
+          })
+          .fail((xhr) => {
+            frame.srcdoc = `<pre style="color:#b91c1c;padding:12px">read failed: ${escapeHtml(xhr?.responseText || xhr?.statusText || '')}</pre>`;
+          });
+        return;
+      }
+      if (/\.(gif|png|jpe?g|webp|bmp|svg|ico)$/i.test(path)) {
+        frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+          html,body{margin:0;height:100%;background:#f8fafc}
+          .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
+          img{max-width:100%;max-height:100%;object-fit:contain;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
+        </style></head><body><div class="wrap"><img src="${previewUrl}" alt="preview"></div></body></html>`;
+        return;
+      }
+      if (/\.(mov|mp4|webm|ogg)$/i.test(path)) {
+        frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+          html,body{margin:0;height:100%;background:#f8fafc}
+          .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
+          video{max-width:100%;max-height:100%;background:#000;border:1px solid #e2e8f0;border-radius:8px}
+        </style></head><body><div class="wrap"><video controls preload="metadata" src="${previewUrl}"></video></div></body></html>`;
+        return;
+      }
+      frame.srcdoc = '';
+      frame.src = previewUrl;
+    }
+
+    render();
+  </script>
+</body>
+</html>
