@@ -35,17 +35,27 @@ function tres(string $text, int $code = 200): void {
     exit;
 }
 
-function normalize_joined(string $input): string {
-    $input = str_replace('\\', '/', trim($input));
-    if ($input === '') return root_dir();
-    if (preg_match('/^[A-Za-z]:\//', $input)) {
-        $candidate = $input;
-    } else {
-        // Treat slash-leading paths as workspace-relative (not filesystem root).
-        $candidate = root_dir() . '/' . ltrim($input, '/');
+function normalize_physical_path(string $input): string {
+    $raw = str_replace('\\', '/', trim($input));
+    if ($raw === '') tres('path must be physical absolute path', 400);
+    if (preg_match('/^[A-Za-z]:\//', $raw) === 1) {
+        $raw = '/' . $raw;
     }
+    if (!str_starts_with($raw, '/')) {
+        tres('path must be physical absolute path: ' . $input, 400);
+    }
+
+    $kind = 'unix';
+    $prefix = '/';
+    $rest = substr($raw, 1);
+    if (preg_match('/^([A-Za-z]:)(?:\/(.*)|$)/', $rest, $m) === 1) {
+        $kind = 'drive';
+        $prefix = strtoupper($m[1]) . '/';
+        $rest = isset($m[2]) ? (string)$m[2] : '';
+    }
+
     $parts = [];
-    foreach (explode('/', $candidate) as $part) {
+    foreach (explode('/', $rest) as $part) {
         if ($part === '' || $part === '.') continue;
         if ($part === '..') {
             if (count($parts) > 0) array_pop($parts);
@@ -53,32 +63,26 @@ function normalize_joined(string $input): string {
         }
         $parts[] = $part;
     }
-    if (preg_match('/^[A-Za-z]:$/', $parts[0] ?? '')) {
-        $drive = array_shift($parts);
-        return $drive . '/' . implode('/', $parts);
-    }
-    return '/' . implode('/', $parts);
-}
 
-function ensure_in_root(string $path): string {
-    $n = rtrim(str_replace('\\', '/', $path), '/');
-    if (preg_match('/^[A-Za-z]:$/', $n)) $n .= '/';
-    if ($n === '') $n = '/';
-    return $n;
+    if ($kind === 'drive') {
+        return count($parts) > 0 ? $prefix . implode('/', $parts) : $prefix;
+    }
+    return count($parts) > 0 ? '/' . implode('/', $parts) : '/';
 }
 
 function resolve_path(string $input): string {
-    return ensure_in_root(normalize_joined($input));
+    return normalize_physical_path($input);
+}
+
+function to_api_path(string $physical): string {
+    $raw = str_replace('\\', '/', trim($physical));
+    if ($raw === '') return '/';
+    if (preg_match('/^[A-Za-z]:\//', $raw) === 1) return '/' . $raw;
+    return str_starts_with($raw, '/') ? $raw : '/' . $raw;
 }
 
 function rel_from_root(string $abs): string {
-    $root = root_dir();
-    $abs = str_replace('\\', '/', $abs);
-    if (strtolower($abs) === strtolower($root)) return '/';
-    if (!str_starts_with(strtolower($abs . '/'), strtolower($root . '/'))) {
-        return $abs;
-    }
-    return '/' . ltrim(substr($abs, strlen($root)), '/');
+    return to_api_path($abs);
 }
 
 function path_join(string $base, string $name): string {

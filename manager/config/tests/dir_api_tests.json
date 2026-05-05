@@ -1,6 +1,6 @@
 {
     "sectionName":  "Dir API",
-    "initScript":  "await ManagerApi.ready();\nconst apiBase = ManagerApi.getBase() + \u0027/dir\u0027;\nconst baseDir = \u0027/.temp\u0027;\nconst testDirName = \u0027api-dir\u0027;\nreturn {\n  apiBase, baseDir, testDirName,\n  createDirUrl: apiBase + \u0027/create_dir.php\u0027,\n  scanDirUrl: apiBase + \u0027/scan_dir.php\u0027,\n  renameDirUrl: apiBase + \u0027/rename_dir.php\u0027,\n  deleteDirUrl: apiBase + \u0027/delete_dir.php\u0027,\n  message: \u0027init done\u0027\n};",
+    "initScript":  "await ManagerApi.ready();\nconst apiBase = ManagerApi.getBase() + \u0027/dir\u0027;\nconst siteApiBase = ManagerApi.getBase() + \u0027/site\u0027;\nconst workspaceRoot = (await utils.postForm(siteApiBase + \u0027/get_root.php\u0027, {})).trim().replace(/\\/$/, \u0027\u0027);\nconst baseDir = workspaceRoot + \u0027/.temp\u0027;\nconst testDirName = \u0027api-dir\u0027;\nreturn {\n  apiBase, baseDir, testDirName,\n  createDirUrl: apiBase + \u0027/create_dir.php\u0027,\n  scanDirUrl: apiBase + \u0027/scan_dir.php\u0027,\n  renameDirUrl: apiBase + \u0027/rename_dir.php\u0027,\n  deleteDirUrl: apiBase + \u0027/delete_dir.php\u0027,\n  message: \u0027init done\u0027\n};",
     "finallyScript":  "const names = [\u0027api-dir\u0027, \u0027api-dir-renamed\u0027];\nfor (const n of names) {\n  try { await utils.postForm(deleteDirUrl, { path: baseDir + \u0027/\u0027 + n }); } catch (_) {}\n}\nreturn { message: \u0027cleanup done\u0027 };",
     "tests":  [
                   {
@@ -25,3 +25,4 @@
                   }
               ]
 }
+

@@ -1,6 +1,6 @@
 ﻿(() => {
   const STORAGE_KEY = "manager_api_version_v1";
-  const CONFIG_URL = "/manager/config/servar.json";
+  const CONFIG_URL = "config/servar.json";
   const API_MAP = { php74: "api74", php84: "api84" };
 
   let selectedDir = "";
@@ -41,7 +41,7 @@
 
   function getBase() {
     if (!selectedDir) throw new Error("ManagerApi not ready");
-    return `/manager/${selectedDir}`;
+    return `${selectedDir}`;
   }
 
   function url(path) {
@@ -62,7 +62,9 @@
   async function call(pathOrUrl, data = {}, method = "POST", fetchInit = {}) {
     await ensureReady();
     const m = String(method || "POST").toUpperCase();
-    const target = pathOrUrl.startsWith("/manager/") ? pathOrUrl : url(pathOrUrl);
+    const target = (/^(https?:)?\/\//i.test(pathOrUrl) || String(pathOrUrl || "").startsWith("/"))
+      ? pathOrUrl
+      : url(pathOrUrl);
     const init = { ...fetchInit, method: m };
     let requestUrl = target;
     if (m === "GET") {

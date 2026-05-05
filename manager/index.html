@@ -111,32 +111,38 @@
       <span id="apiVersionHint"></span>
     </p>
     <section class="grid">
-      <a class="card" href="/manager/explorer.html">
+      <a class="card" href="explorer.html">
         <span class="badge home-banner">V3</span>
         <h2>Explorer</h2>
         <p>單一版本入口（統一使用 type2/scan2/read2）。</p>
       </a>
 
-      <a class="card" href="/manager/tests.html">
+      <a class="card" href="tests.html">
         <span class="badge home-banner">Tests</span>
         <h2>API Tests</h2>
         <p>逐行執行並顯示 file API 測試狀態，可直接編輯測試腳本。</p>
       </a>
 
-      <a class="card" href="/manager/info.html">
+      <a class="card" href="info.html">
         <span class="badge home-banner">Info</span>
         <h2>PHP Info</h2>
         <p>檢視當前 PHP/Server/限制參數，方便對照 phpinfo 與環境設定。</p>
       </a>
+
+      <a class="card" href="preview.html">
+        <span class="badge home-banner">Preview</span>
+        <h2>Open Preview</h2>
+        <p>進入 Preview 頁面後可動態修改 path。</p>
+      </a>
     </section>
   </main>
-  <script src="/manager/js/api.js"></script>
+  <script src="js/api.js"></script>
   <script>
     document.querySelectorAll(".home-banner").forEach((el) => {
       el.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        window.location.href = "/manager/index.html";
+        window.location.href = "index.html";
       });
     });
     const select = document.getElementById("apiVersionSelect");

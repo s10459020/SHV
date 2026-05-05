@@ -8,8 +8,8 @@
   <meta http-equiv="Expires" content="0">
   <title>Preview</title>
   <script src="https://code.jquery.com/jquery.min.js"></script>
-  <script src="/manager/js/api.js"></script>
-  <script src="/manager/js/preview/markdown_preview.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/preview/markdown_preview.js"></script>
   <style>
     :root{--bg:#f2f5fb;--card:#fff;--line:#d7e2f3;--text:#1f2a37;--muted:#58657a}
     *{box-sizing:border-box}
@@ -20,18 +20,19 @@
     .toolbar,.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
     .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .path{font-family:ui-monospace,Consolas,monospace;color:#234;word-break:break-all}
+    .path-input{flex:1;min-width:280px;border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-family:ui-monospace,Consolas,monospace}
     #frame{width:100%;height:72vh;border:1px solid var(--line);border-radius:10px;background:#fff}
     .muted{color:var(--muted)}
     button{border:1px solid #c8d4ea;background:#fff;border-radius:9px;padding:7px 11px;cursor:pointer}
   </style>
 </head>
 <body>
-  <div class="top-nav"><a class="home-banner" href="/manager/index.html">Preview</a></div>
+  <div class="top-nav"><a class="home-banner" href="index.html">Preview</a></div>
   <main class="wrap">
     <section class="toolbar">
       <button id="btnBack">返回</button>
-      <span class="muted">Path:</span>
-      <span id="pathText" class="path"></span>
+      <span class="muted">實體:</span>
+      <input id="pathInput" class="path-input" type="text">
     </section>
     <section class="panel">
       <iframe id="frame"></iframe>
@@ -39,42 +40,120 @@
   </main>
   <script>
     const q = new URLSearchParams(location.search);
-    const path = decodeURIComponent(q.get('path') || '/');
+    const rawPath = decodeURIComponent(q.get('path') || '');
     const blob = decodeURIComponent(q.get('blob') || '');
     const name = decodeURIComponent(q.get('name') || '');
-    const from = String(q.get('from') || 'explorer');
-    const diffBase = decodeURIComponent(q.get('base') || '');
-    const restore = String(q.get('restore') || '') === '1';
+    const from = String(q.get('from') || '');
 
+    let workspaceRootAbs = '';
+    let path = String(rawPath || '');
+    let currentBlob = String(blob || '');
+    let currentName = String(name || '');
     let fileReadApi = '';
     let filePreviewApi = '';
-    $('#pathText').text(blob ? (`[local] ${name || path}`) : path);
+    let rootApi = '';
+    const EXPLORER_PATH_COOKIE = 'manager_explorer_path_v1';
 
     function applyApiEndpoints() {
       const base = ManagerApi.getBase();
+      rootApi = `${base}/site/get_root.php`;
       fileReadApi = `${base}/file/read_file.php`;
       filePreviewApi = `${base}/file/preview_file.php`;
     }
-
-    function parentDir(p){
-      const s = String(p || '').replace(/\\/g, '/');
-      const i = s.lastIndexOf('/');
-      if (i <= 0) return '/';
-      return s.slice(0, i);
+    function isAbsDrivePath(p){
+      return /^[A-Za-z]:\//.test(String(p || '').replace(/\\/g, '/'));
     }
-
+    function splitPhysicalPath(path){
+      const raw = String(path || '').replace(/\\/g, '/').trim();
+      if (!raw) return null;
+      let p = raw;
+      if (/^\/[A-Za-z]:($|\/)/.test(p)) p = p.slice(1);
+      if (isAbsDrivePath(p)) {
+        const drive = p.slice(0, 2).toUpperCase();
+        const tail = p.slice(2).replace(/^\/+/, '');
+        const segs = tail.split('/').filter(Boolean);
+        return { kind: 'drive', root: `${drive}/`, segs };
+      }
+      if (p.startsWith('/')) {
+        const segs = p.slice(1).split('/').filter(Boolean);
+        return { kind: 'unix', root: '/', segs };
+      }
+      return null;
+    }
+    function joinPhysicalPath(kind, root, segs){
+      if (kind === 'drive') return segs.length ? `${root}${segs.join('/')}` : root;
+      return segs.length ? `/${segs.join('/')}` : '/';
+    }
+    function formatApiPath(info){
+      if (!info) return '';
+      const joined = joinPhysicalPath(info.kind, info.root, info.segs);
+      return info.kind === 'drive' ? `/${joined}` : joined;
+    }
+    function normalizePhysicalPath(p){
+      let raw = String(p || '').replace(/\\/g, '/').trim();
+      if (!raw) return '';
+      if (isAbsDrivePath(raw)) raw = '/' + raw;
+      const info = splitPhysicalPath(raw);
+      if (!info) return '';
+      return formatApiPath(info);
+    }
+    function parentDir(p){
+      const info = splitPhysicalPath(p);
+      if (!info) return '';
+      if (info.segs.length > 0) info.segs.pop();
+      return formatApiPath(info);
+    }
+    function updateLocationQuery(){
+      const nq = new URLSearchParams();
+      if (path) nq.set('path', path);
+      if (from) nq.set('from', from);
+      const next = location.pathname + '?' + nq.toString();
+      history.replaceState(null, '', next);
+    }
+    function updatePathLabel(){
+      $('#pathInput').val(path);
+    }
+    function getCookie(name){
+      const key = `${name}=`;
+      const arr = document.cookie.split(';');
+      for (const raw of arr){
+        const c = raw.trim();
+        if (c.startsWith(key)) return decodeURIComponent(c.substring(key.length));
+      }
+      return '';
+    }
+    function explorerReturnPath(){
+      const saved = normalizePhysicalPath(String(getCookie(EXPLORER_PATH_COOKIE) || '').trim());
+      if (saved) return saved;
+      return normalizePhysicalPath(parentDir(path)) || normalizePhysicalPath(workspaceRootAbs);
+    }
     $('#btnBack').on('click', () => {
-      if (from === 'diff') {
-        if (document.referrer && document.referrer.includes('/manager/diff.html')) {
-          history.back();
-          return;
-        }
-        const b = diffBase || parentDir(path);
-        const r = restore ? '&restore=1' : '';
-        location.href = '/manager/diff.html?base=' + encodeURIComponent(b) + r;
+      if (from === 'explorer') {
+        location.href = 'explorer.html?path=' + encodeURIComponent(explorerReturnPath());
         return;
       }
-      location.href = '/manager/explorer.html?path=' + encodeURIComponent(parentDir(path));
+      if (window.history.length > 1) {
+        history.back();
+        return;
+      }
+      const fallback = normalizePhysicalPath(parentDir(path)) || normalizePhysicalPath(workspaceRootAbs);
+      location.href = 'explorer.html?path=' + encodeURIComponent(fallback);
+    });
+    function openPath() {
+      const p = normalizePhysicalPath(String($('#pathInput').val() || '').trim() || '');
+      if (!p) {
+        alert('請輸入實體絕對路徑');
+        return;
+      }
+      path = p;
+      currentBlob = '';
+      currentName = '';
+      updateLocationQuery();
+      updatePathLabel();
+      render();
+    }
+    $('#pathInput').on('keydown', (e) => {
+      if (e.key === 'Enter') openPath();
     });
 
     function escapeHtml(text){
@@ -88,13 +167,20 @@
 
     function render(){
       const frame = $('#frame')[0];
-      const previewUrl = blob || `${filePreviewApi}?path=${encodeURIComponent(path)}`;
-      const targetName = (name || path || '').toLowerCase();
+      const previewUrl = currentBlob || `${filePreviewApi}?path=${encodeURIComponent(path)}`;
+      const targetName = (currentName || path || '').toLowerCase();
+      const loadText = () => currentBlob
+        ? fetch(previewUrl).then((r) => r.text())
+        : $.post(fileReadApi, { path }).then((x) => x);
+      const renderText = (res) => {
+        frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+          *{box-sizing:border-box}
+          body{font-family:ui-monospace,Consolas,monospace;line-height:1.5;color:#1f2a37;padding:14px;margin:0;background:#fff}
+          pre{margin:0;white-space:pre-wrap;word-break:break-word}
+        </style></head><body><pre>${escapeHtml(res ?? '')}</pre></body></html>`;
+      };
       if (/\.md$/i.test(targetName)) {
-        const loadMd = blob
-          ? fetch(previewUrl).then(r => r.text())
-          : $.post(fileReadApi, { path }).then((x) => x);
-        Promise.resolve(loadMd)
+        Promise.resolve(loadText())
           .then((res) => {
             const html = window.MarkdownPreview
               ? window.MarkdownPreview.renderToHtml(res ?? '')
@@ -133,13 +219,28 @@
         </style></head><body><div class="wrap"><video controls preload="metadata" src="${previewUrl}"></video></div></body></html>`;
         return;
       }
-      frame.srcdoc = '';
-      frame.src = previewUrl;
+      if (/\.pdf$/i.test(targetName)) {
+        frame.srcdoc = '';
+        frame.src = previewUrl;
+        return;
+      }
+      Promise.resolve(loadText())
+        .then((res) => renderText(res))
+        .catch((xhr) => {
+          frame.srcdoc = `<pre style="color:#b91c1c;padding:12px">read failed: ${escapeHtml(xhr?.responseText || xhr?.statusText || xhr?.message || '')}</pre>`;
+        });
     }
 
     async function boot() {
       await ManagerApi.ready();
       applyApiEndpoints();
+      try {
+        workspaceRootAbs = normalizePhysicalPath(String(await $.post(rootApi, {})));
+      } catch (_) {
+        workspaceRootAbs = '';
+      }
+      path = normalizePhysicalPath(path) || workspaceRootAbs;
+      updatePathLabel();
       render();
     }
     boot();

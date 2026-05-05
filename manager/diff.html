@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Diff</title>
   <script src="https://code.jquery.com/jquery.min.js"></script>
-  <script src="/manager/js/api.js"></script>
+  <script src="js/api.js"></script>
   <style>
     :root{--bg:#f2f5fb;--card:#fff;--line:#d7e2f3;--text:#1f2a37;--muted:#58657a;--red:#ffd8d8;--yellow:#fff2bf;--green:#d9f8dc}
     *{box-sizing:border-box}
@@ -39,7 +39,7 @@
   </style>
 </head>
 <body>
-  <div class="top-nav"><a class="home-banner" href="/manager/index.html">Diff</a></div>
+  <div class="top-nav"><a class="home-banner" href="index.html">Diff</a></div>
   <main class="wrap">
     <section class="toolbar">
       <div class="toolbar-row">
@@ -78,19 +78,68 @@
   </form>
 
   <script>
+    function isAbsDrivePath(path) {
+      return /^[A-Za-z]:\//.test(String(path || '').replace(/\\/g, '/'));
+    }
+    function splitPhysicalPath(path){
+      const raw = String(path || '').replace(/\\/g, '/').trim();
+      if (!raw) return null;
+      let p = raw;
+      if (/^\/[A-Za-z]:($|\/)/.test(p)) p = p.slice(1);
+      if (isAbsDrivePath(p)) {
+        const drive = p.slice(0, 2).toUpperCase();
+        const tail = p.slice(2).replace(/^\/+/, '');
+        const segs = tail.split('/').filter(Boolean);
+        return { kind: 'drive', root: `${drive}/`, segs };
+      }
+      if (p.startsWith('/')) {
+        const segs = p.slice(1).split('/').filter(Boolean);
+        return { kind: 'unix', root: '/', segs };
+      }
+      return null;
+    }
+    function joinPhysicalPath(kind, root, segs){
+      if (kind === 'drive') return segs.length ? `${root}${segs.join('/')}` : root;
+      return segs.length ? `/${segs.join('/')}` : '/';
+    }
+    function formatApiPath(info){
+      if (!info) return '';
+      const joined = joinPhysicalPath(info.kind, info.root, info.segs);
+      return info.kind === 'drive' ? `/${joined}` : joined;
+    }
+    function normalizePhysicalPath(path){
+      let raw = String(path ?? '').replace(/\\/g, '/').trim();
+      if (raw === '') return '';
+      if (isAbsDrivePath(raw)) raw = '/' + raw;
+      const info = splitPhysicalPath(raw);
+      if (!info) return '';
+      return formatApiPath(info);
+    }
+    function joinPhysical(base, rel){
+      const absRel = normalizePhysicalPath(rel);
+      if (absRel) return absRel;
+      const info = splitPhysicalPath(base);
+      if (!info) return '';
+      const out = [...info.segs];
+      for (const part of String(rel || '').replace(/\\/g, '/').split('/')) {
+        if (!part || part === '.') continue;
+        if (part === '..') {
+          if (out.length > 0) out.pop();
+          continue;
+        }
+        out.push(part);
+      }
+      return formatApiPath({ kind: info.kind, root: info.root, segs: out });
+    }
     const qs = new URLSearchParams(location.search);
-    const basePath = decodeURIComponent(qs.get('base') || '/');
+    let basePath = normalizePhysicalPath(decodeURIComponent(qs.get('base') || ''));
     const restore = String(qs.get('restore') || '') === '1';
     const fresh = String(qs.get('fresh') || '') === '1';
-    const baseFolderName = (() => {
-      const n = String(basePath || '').replace(/\\/g, '/').replace(/\/+$/, '');
-      const segs = n.split('/').filter(Boolean);
-      return segs.length ? segs[segs.length - 1] : '';
-    })();
 
     let apiList = '';
     let apiUpload = '';
     let apiDelete = '';
+    let rootApi = '';
     const MTIME_TOLERANCE_MS = 2000;
 
     function applyApiEndpoints() {
@@ -98,6 +147,7 @@
       apiList = `${base}/dir/scan_all_file.php`;
       apiUpload = `${base}/file/upload_files.php`;
       apiDelete = `${base}/file/delete_file.php`;
+      rootApi = `${base}/site/get_root.php`;
       $('#downloadForm').attr('action', `${base}/dir/download_files.php`);
     }
 
@@ -107,20 +157,6 @@
 
     const normalizeRel = (p) => String(p || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/');
     const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : '';
-    const withBaseFolder = (rel) => {
-      const r = normalizeRel(rel);
-      if (!baseFolderName) return r;
-      if (!r) return baseFolderName;
-      if (r === baseFolderName || r.startsWith(baseFolderName + '/')) return r;
-      return `${baseFolderName}/${r}`;
-    };
-    const stripBasePrefix = (path) => {
-      const p = normalizeRel(path);
-      if (!baseFolderName) return p;
-      if (p === baseFolderName) return '';
-      if (p.startsWith(baseFolderName + '/')) return p.slice(baseFolderName.length + 1);
-      return p;
-    };
     const relDir = (path) => {
       const p = normalizeRel(path);
       const i = p.lastIndexOf('/');
@@ -168,14 +204,14 @@
           .map(x => ({ path: normalizeRel(x.path), mtimeMs: Number(x.mtimeMs || 0) }));
       }catch(_){}
     }
-    function openPreviewFromDiff(absPath){
-      const u = `/manager/preview.html?path=${encodeURIComponent(absPath)}&from=diff&base=${encodeURIComponent(basePath)}&restore=1`;
+    function openPreviewFromDiff(targetPath){
+      const u = `preview.html?path=${encodeURIComponent(normalizePhysicalPath(targetPath))}&from=diff`;
       location.href = u;
     }
     function openPreviewBlob(fileObj){
       const blobUrl = URL.createObjectURL(fileObj);
       const name = fileObj?.name || 'local-file';
-      const u = `/manager/preview.html?blob=${encodeURIComponent(blobUrl)}&name=${encodeURIComponent(name)}&from=diff&base=${encodeURIComponent(basePath)}&restore=1`;
+      const u = `preview.html?blob=${encodeURIComponent(blobUrl)}&name=${encodeURIComponent(name)}&from=diff&base=${encodeURIComponent(basePath)}&restore=1`;
       location.href = u;
     }
 
@@ -235,7 +271,7 @@
       $('#basePath').text(basePath);
       const text = await $.post(apiList, { path: basePath });
       const rows = Array.isArray(text) ? text : JSON.parse(text || '[]');
-      leftFiles = rows.map(r => ({ path: withBaseFolder(r.path), mtimeMs: Math.floor(Number(r.mtime || 0)) * 1000 }))
+      leftFiles = rows.map(r => ({ path: normalizeRel(r.path), mtimeMs: Math.floor(Number(r.mtime || 0)) * 1000 }))
         .sort((a,b)=>a.path.localeCompare(b.path));
       render();
     }
@@ -327,10 +363,10 @@
       let uploadCount = 0;
       for (const r of toUpload) {
         if (!r.right?.file) continue;
-        const rel = stripBasePrefix(r.path);
+        const rel = normalizeRel(r.path);
         if (!rel) continue;
         const dir = relDir(rel);
-        const targetDir = dir ? `${basePath}/${dir}` : basePath;
+        const targetDir = dir ? joinPhysical(basePath, dir) : basePath;
         fd.append('files[]', r.right.file, relBase(rel));
         fd.append('dirs[]', targetDir);
         fd.append('mtimes[]', String(r.right.mtimeMs || 0));
@@ -352,10 +388,10 @@
       }
 
       for (const r of toDelete) {
-        const rel = stripBasePrefix(r.path);
+        const rel = normalizeRel(r.path);
         if (!rel) continue;
         try {
-          await postText(apiDelete, { path: `${basePath}/${rel}` });
+          await postText(apiDelete, { path: joinPhysical(basePath, rel) });
         } catch (e) {
           const msg = String(e?.message || e || '');
           // If file is already gone, treat as already deleted.
@@ -374,7 +410,7 @@
       const rows = getDiffRows();
       const files = rows
         .filter(r => r.state === 'left_newer' || r.state === 'remove')
-        .map(r => stripBasePrefix(r.path))
+        .map(r => normalizeRel(r.path))
         .filter(Boolean);
       if (files.length === 0) {
         alert('沒有可下載的差異檔案');
@@ -385,7 +421,7 @@
       $('#downloadForm')[0].submit();
     }
 
-    $('#btnBack').on('click', () => { location.href = `/manager/explorer.html?path=${encodeURIComponent(basePath)}`; });
+    $('#btnBack').on('click', () => { location.href = `explorer.html?path=${encodeURIComponent(basePath)}`; });
     $('#btnReload').on('click', () => loadLeft().catch(err => alert('load fail: ' + err)));
     $('#btnUpload').on('click', () => runUploadApply().catch(err => alert('上傳套用失敗: ' + (err?.message || err))));
     $('#btnDownload').on('click', () => {
@@ -394,9 +430,9 @@
     $('#leftItems').on('click', '.pv-link-left', (e) => {
       e.preventDefault();
       const rel = decodeURIComponent(String($(e.currentTarget).attr('data-rel') || ''));
-      const sub = stripBasePrefix(rel);
-      const abs = sub ? `${basePath}/${sub}` : basePath;
-      openPreviewFromDiff(abs);
+      const sub = normalizeRel(rel);
+      const target = sub ? joinPhysical(basePath, sub) : basePath;
+      openPreviewFromDiff(target);
     });
     $('#rightItems').on('click', '.pv-link-right', (e) => {
       e.preventDefault();
@@ -406,14 +442,23 @@
         openPreviewBlob(item.file);
         return;
       }
-      const sub = stripBasePrefix(rel);
-      const abs = sub ? `${basePath}/${sub}` : basePath;
-      openPreviewFromDiff(abs);
+      const sub = normalizeRel(rel);
+      const target = sub ? joinPhysical(basePath, sub) : basePath;
+      openPreviewFromDiff(target);
     });
 
     async function boot() {
       await ManagerApi.ready();
       applyApiEndpoints();
+      if (!basePath) {
+        try {
+          basePath = normalizePhysicalPath(await $.post(rootApi, {}));
+          const nqs = new URLSearchParams(location.search);
+          nqs.set('base', basePath);
+          const next = location.pathname + '?' + nqs.toString();
+          history.replaceState(null, '', next);
+        } catch (_) {}
+      }
       initDrop();
       if (fresh) {
         clearDiffState();

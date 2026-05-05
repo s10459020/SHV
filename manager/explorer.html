@@ -6,8 +6,8 @@
 		<meta http-equiv="Pragma" content="no-cache">
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 		<script src="https://code.jquery.com/jquery.min.js"></script>
-		<script src="/manager/js/api.js"></script>
-		<script src="/manager/js/preview/markdown_preview.js"></script>
+		<script src="js/api.js"></script>
+		<script src="js/preview/markdown_preview.js"></script>
 		<style>
 			:root{
 				--bg: #f2f5fb;
@@ -201,20 +201,20 @@
 	</head>
 	<body onload="boot()">
 		<div class="top-nav">
-			<a class="home-banner" href="/manager/index.html">Explorer</a>
+			<a class="home-banner" href="index.html">Explorer</a>
 		</div>
 		<main class="page-wrap">
 		
 		<div class="toolbar-card">
 			<div class="toolbar-actions">
 				<button onclick="pathBack(currentPath)">上一頁</button>
-				<button onclick="read(currentPath+'/..')">上層</button>
+				<button onclick="read(joinPath(currentPath, '..'))">上層</button>
 				<button onclick="resetExplorer()">重置</button>
 				<button onclick="openDiff(currentPath)">Diff</button>
 				<button onclick="download(currentPath)">下載當前項目</button>
 			</div>
 			<div class="path-row">
-				<label for="path">路徑</label>
+				<label for="path">實體路徑</label>
 				<input id="path" type="text" onkeydown="onPathEnter(event)" onblur="read(this.value)"/>
 			</div>
 			<div id="breadcrumb" class="breadcrumb"></div>
@@ -255,7 +255,7 @@
 		
 		<script>
 			// global varable
-			let currentPath = "/";
+			let currentPath = "";
 			let workspaceRootAbs = '';
 						
 			// api
@@ -300,84 +300,60 @@
 			function isAbsDrivePath(path){
 				return /^[A-Za-z]:\//.test(String(path || '').replace(/\\/g, '/'));
 			}
-			function normalizeAbsPath(path){
-				const raw = String(path || '').replace(/\\/g, '/');
-				if (!isAbsDrivePath(raw)) return raw;
-				const drive = raw.slice(0, 2);
-				const segs = raw.slice(2).split('/').filter(Boolean);
-				const out = [];
-				for (const seg of segs){
-					if (seg === '.') continue;
-					if (seg === '..') {
-						if (out.length > 0) out.pop();
-						continue;
-					}
-					out.push(seg);
+			function splitPhysicalPath(path){
+				const raw = String(path || '').replace(/\\/g, '/').trim();
+				if (raw === '') return null;
+				let p = raw;
+				if (/^\/[A-Za-z]:($|\/)/.test(p)) p = p.slice(1);
+				if (isAbsDrivePath(p)) {
+					const drive = p.slice(0, 2).toUpperCase();
+					const tail = p.slice(2).replace(/^\/+/, '');
+					const segs = tail.split('/').filter(Boolean);
+					return { kind: 'drive', root: `${drive}/`, key: drive.toLowerCase(), segs };
 				}
-				return out.length ? `${drive}/${out.join('/')}` : `${drive}/`;
+				if (p.startsWith('/')) {
+					const segs = p.slice(1).split('/').filter(Boolean);
+					return { kind: 'unix', root: '/', key: '/', segs };
+				}
+				return null;
 			}
-			function normalizeVirtualPath(path){
+			function joinPhysicalPath(kind, root, segs){
+				if (kind === 'drive') return segs.length ? `${root}${segs.join('/')}` : root;
+				return segs.length ? `/${segs.join('/')}` : '/';
+			}
+			function formatApiPath(info){
+				if (!info) return '';
+				const joined = joinPhysicalPath(info.kind, info.root, info.segs);
+				return info.kind === 'drive' ? `/${joined}` : joined;
+			}
+			function normalizePhysicalPath(path){
 				let raw = String(path ?? '').replace(/\\/g, '/').trim();
-				if (raw === '') return '/';
-				if (!raw.startsWith('/')) raw = '/' + raw;
-				const tokens = raw.split('/');
-				const out = [];
-				let leadingUps = 0;
-				for (const token of tokens){
-					if (!token || token === '.') continue;
-					if (token === '..'){
-						if (out.length > 0) out.pop();
-						else leadingUps++;
-						continue;
-					}
-					out.push(token);
-				}
-				let p = '/';
-				if (leadingUps > 0) p += '../'.repeat(leadingUps);
-				p += out.join('/');
-				p = p.replace(/\/+$/, '');
-				return p === '' ? '/' : p;
-			}
-			function splitRootSegments(absPath){
-				const p = normalizeAbsPath(absPath);
-				if (!isAbsDrivePath(p)) return [];
-				const drive = p.slice(0, 2);
-				const rest = p.slice(2).split('/').filter(Boolean);
-				return [drive, ...rest];
-			}
-			function toAbsoluteFromVirtual(virtualPath){
-				if (isAbsDrivePath(virtualPath)) return normalizeAbsPath(virtualPath);
-				const v = normalizeVirtualPath(virtualPath);
-				if (!workspaceRootAbs || !isAbsDrivePath(workspaceRootAbs)) return v;
-				const base = splitRootSegments(workspaceRootAbs);
-				const rel = v.slice(1); // remove leading /
-				const segs = rel ? rel.split('/').filter(Boolean) : [];
-				for (const seg of segs){
-					if (seg === '..'){
-						if (base.length > 1) base.pop();
-						continue;
-					}
-					base.push(seg);
-				}
-				return base.length > 1 ? `${base[0]}/${base.slice(1).join('/')}` : `${base[0]}/`;
-			}
-			function isUnderWorkspace(absPath){
-				if (!workspaceRootAbs) return true;
-				const p = normalizeAbsPath(absPath).toLowerCase();
-				const r = normalizeAbsPath(workspaceRootAbs).toLowerCase();
-				return p === r || p.startsWith(r + '/');
+				if (raw === '') return '';
+				if (isAbsDrivePath(raw)) raw = '/' + raw;
+				const info = splitPhysicalPath(raw);
+				if (!info) return '';
+				return formatApiPath(info);
 			}
 			function normalizePath(path){
-				const raw = String(path ?? '').replace(/\\/g, '/');
-				if (isAbsDrivePath(raw)) return normalizeAbsPath(raw);
-				const v = normalizeVirtualPath(raw);
-				// keep unresolved leading ".." in relative form by request, e.g. /../temp/../ -> /../
-				if (v.startsWith('/..')) return v;
-				const abs = toAbsoluteFromVirtual(v);
-				return isUnderWorkspace(abs) ? v : abs;
+				return normalizePhysicalPath(path);
 			}
 			function joinPath(base, name){
-				return normalizePath(`${base}/${name}`);
+				const n = String(name || '').replace(/\\/g, '/').trim();
+				if (!n) return normalizePhysicalPath(base);
+				const absName = normalizePhysicalPath(n);
+				if (absName) return absName;
+				const baseInfo = splitPhysicalPath(base);
+				if (!baseInfo) return '';
+				const out = [...baseInfo.segs];
+				for (const part of n.split('/')) {
+					if (!part || part === '.') continue;
+					if (part === '..') {
+						if (out.length > 0) out.pop();
+						continue;
+					}
+					out.push(part);
+				}
+				return formatApiPath({ kind: baseInfo.kind, root: baseInfo.root, segs: out });
 			}
 			function escapeHtml(text){
 				return String(text)
@@ -408,27 +384,26 @@
 				setCookie(EXPLORER_PATH_COOKIE, normalizePath(path));
 			}
 			function parentDir(path){
-				const s = String(path || '').replace(/\\/g, '/');
-				const i = s.lastIndexOf('/');
-				if (i <= 0) return '/';
-				return s.slice(0, i);
+				const info = splitPhysicalPath(path);
+				if (!info) return '';
+				if (info.segs.length > 0) info.segs.pop();
+				return formatApiPath(info);
 			}
 			function getStartupPath(){
 				const q = new URLSearchParams(window.location.search);
-				const qp = q.get('path');
-				if (qp) return normalizePath(qp);
+				if (q.has('path')) return normalizePath(q.get('path') || '');
 				const saved = getCookie(EXPLORER_PATH_COOKIE);
-				return saved ? normalizePath(saved) : '/';
+				return saved ? normalizePath(saved) : normalizePath(workspaceRootAbs);
 			}
 			function resetExplorer(){
 				deleteCookie(EXPLORER_PATH_COOKIE);
-				read('/');
+				read(workspaceRootAbs);
 			}
 			async function boot(){
 				try{
 					await ManagerApi.ready();
 					applyApiEndpoints();
-					workspaceRootAbs = normalizeAbsPath(await $.post(rootApi, {}));
+					workspaceRootAbs = normalizePath(await $.post(rootApi, {}));
 				}catch(_){
 					workspaceRootAbs = '';
 				}
@@ -446,18 +421,29 @@
 					read(event.target.value);
 				}
 			}
+			function clearExplorerContent(){
+				const listDom = $('#list').find('ul');
+				const frameDom = $('#view').find('iframe');
+				const editDom = $('#edit').find('textarea');
+				listDom.empty();
+				frameDom.attr('src', '');
+				frameDom.attr('srcdoc', '');
+				editDom.val('');
+			}
 			function renderBreadcrumb(path){
 				const dom = $('#breadcrumb');
 				dom.empty();
-				const segs = normalizePath(path).split('/').filter(Boolean);
-				const rootBtn = $('<button type="button">/</button>');
-				rootBtn.on('click', () => read('/'));
+				const info = splitPhysicalPath(path);
+				if (!info) return;
+				const rootLabel = info.kind === 'drive' ? `/${info.root}` : '/';
+				const rootBtn = $(`<button type="button">${rootLabel}</button>`);
+				rootBtn.on('click', () => read(formatApiPath({ kind: info.kind, root: info.root, segs: [] })));
 				dom.append(rootBtn);
-				let acc = '';
-				segs.forEach((seg) => {
-					acc += '/' + seg;
+				const acc = [];
+				info.segs.forEach((seg) => {
+					acc.push(seg);
 					const btn = $(`<button type="button">${seg}</button>`);
-					const target = acc;
+					const target = formatApiPath({ kind: info.kind, root: info.root, segs: [...acc] });
 					btn.on('click', () => read(target));
 					dom.append(btn);
 				});
@@ -483,12 +469,7 @@
 			}
 			
 			function pathBack(path){
-				splits = path.split('/')
-				if(splits.length > 1){
-					splits.pop()
-					path = splits.join('/')
-					read(path)
-				}
+				read(parentDir(path))
 			}
 			
 			function extractEmpty(path){
@@ -526,12 +507,32 @@
 				let editDom = $('#edit')
 				
 				path = normalizePath(path)
+				if (!path) {
+					path = normalizePath(workspaceRootAbs)
+				}
+				if (!path) {
+					clearExplorerContent()
+					listDom.show()
+					viewDom.hide()
+					editDom.hide()
+					return
+				}
 				currentPath = path
 				pathDom.val(path)
 				renderBreadcrumb(path)
 				console.log(path)
 				
-				let type = await $.post(typeApi, {path: path})
+				let type = ''
+				try{
+					type = await $.post(typeApi, {path: path})
+				}catch(err){
+					clearExplorerContent()
+					listDom.show()
+					viewDom.hide()
+					editDom.hide()
+					console.warn('read path fail', path, err)
+					return
+				}
 				switch(type){
 					case 'dir':
 						saveCurrentPath(path)
@@ -542,7 +543,13 @@
 						break;
 					case 'file':
 						saveCurrentPath(parentDir(path))
-						window.location.href = `/manager/preview.html?path=${encodeURIComponent(path)}&from=explorer`;
+						window.location.href = `preview.html?path=${encodeURIComponent(path)}&from=explorer`;
+						break;
+					default:
+						clearExplorerContent()
+						listDom.show()
+						viewDom.hide()
+						editDom.hide()
 						break;
 				}
 			}
@@ -604,6 +611,9 @@
 						})
 						listDom.append(item)
 					})
+				}).fail((xhr) => {
+					listDom.empty()
+					console.warn('readDir fail', path, xhr?.status, xhr?.responseText || xhr?.statusText)
 				});
 			}
 			
@@ -774,7 +784,7 @@
 			}
 
 			function openDiff(path){
-				window.location.href = `/manager/diff.html?base=${encodeURIComponent(path)}&fresh=1`;
+				window.location.href = `diff.html?base=${encodeURIComponent(path)}&fresh=1`;
 			}
 			
 			async function drop(dataTransfer, targetPath = currentPath){
