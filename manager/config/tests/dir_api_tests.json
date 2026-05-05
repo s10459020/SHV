@@ -1,0 +1,27 @@
+{
+    "sectionName":  "Dir API",
+    "initScript":  "await ManagerApi.ready();\nconst apiBase = ManagerApi.getBase() + \u0027/dir\u0027;\nconst baseDir = \u0027/.temp\u0027;\nconst testDirName = \u0027api-dir\u0027;\nreturn {\n  apiBase, baseDir, testDirName,\n  createDirUrl: apiBase + \u0027/create_dir.php\u0027,\n  scanDirUrl: apiBase + \u0027/scan_dir.php\u0027,\n  renameDirUrl: apiBase + \u0027/rename_dir.php\u0027,\n  deleteDirUrl: apiBase + \u0027/delete_dir.php\u0027,\n  message: \u0027init done\u0027\n};",
+    "finallyScript":  "const names = [\u0027api-dir\u0027, \u0027api-dir-renamed\u0027];\nfor (const n of names) {\n  try { await utils.postForm(deleteDirUrl, { path: baseDir + \u0027/\u0027 + n }); } catch (_) {}\n}\nreturn { message: \u0027cleanup done\u0027 };",
+    "tests":  [
+                  {
+                      "id":  "create",
+                      "name":  "create",
+                      "scriptText":  "const text = await utils.postForm(createDirUrl, { dir: baseDir, name: testDirName });\nconst m = text.match(/\\[(.+?)\\/\\]/);\nassert(m \u0026\u0026 m[1], \u0027create: parse fail\u0027);\nreturn { dirPath: m[1], message: \u0027created=\u0027 + m[1] };"
+                  },
+                  {
+                      "id":  "scan",
+                      "name":  "scan",
+                      "scriptText":  "const text = await utils.postForm(scanDirUrl, { path: baseDir });\nconst arr = JSON.parse(text || \u0027[]\u0027);\nassert(Array.isArray(arr), \u0027scan dir: result not array\u0027);\nassert(arr.includes(utils.basename(dirPath)), \u0027scan dir: dir missing\u0027);\nreturn { message: \u0027scan ok\u0027 };"
+                  },
+                  {
+                      "id":  "rename",
+                      "name":  "rename",
+                      "scriptText":  "const text = await utils.postForm(renameDirUrl, { path: dirPath, name: \u0027api-dir-renamed\u0027 });\nconst m = text.match(/to \\[(.+?)\\/\\]/);\nassert(m \u0026\u0026 m[1], \u0027rename dir: parse fail\u0027);\nconst arr = JSON.parse((await utils.postForm(scanDirUrl, { path: baseDir })) || \u0027[]\u0027);\nassert(Array.isArray(arr), \u0027rename dir: scan result not array\u0027);\nassert(!arr.includes(utils.basename(dirPath)), \u0027rename dir: old name still exists\u0027);\nassert(arr.includes(utils.basename(m[1])), \u0027rename dir: new name missing\u0027);\nreturn { renamedDirPath: m[1], message: \u0027renamed + verified=\u0027 + m[1] };"
+                  },
+                  {
+                      "id":  "delete",
+                      "name":  "delete",
+                      "scriptText":  "await utils.postForm(deleteDirUrl, { path: renamedDirPath });\nconst arr = JSON.parse((await utils.postForm(scanDirUrl, { path: baseDir })) || \u0027[]\u0027);\nassert(Array.isArray(arr), \u0027delete dir: scan result not array\u0027);\nassert(!arr.includes(utils.basename(renamedDirPath)), \u0027delete dir: renamed still exists\u0027);\nreturn { message: \u0027deleted + verified\u0027 };"
+                  }
+              ]
+}

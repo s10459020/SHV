@@ -1,0 +1,28 @@
+﻿[
+  {
+    "id": "file_api",
+    "title": "File API",
+    "configUrl": "/manager/config/tests/file_api_tests.json"
+  },
+  {
+    "id": "dir_api",
+    "title": "Dir API",
+    "configUrl": "/manager/config/tests/dir_api_tests.json"
+  },
+  {
+    "id": "absolute_group",
+    "title": "Absolute Path",
+    "configUrl": "/manager/config/tests/absolute_api_tests.json"
+  },
+  {
+    "id": "disk_path",
+    "title": "Disk Path",
+    "configUrl": "/manager/config/tests/disk_path_tests.json"
+  },
+  {
+    "id": "transfer_api",
+    "title": "Transfer API",
+    "configUrl": "/manager/config/tests/transfer_api_tests.json"
+  }
+]
+

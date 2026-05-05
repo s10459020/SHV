@@ -1,4 +1,9 @@
 (() => {
+  async function ensureApiReady() {
+    if (window.ManagerApi && typeof window.ManagerApi.ready === "function") {
+      await window.ManagerApi.ready();
+    }
+  }
   const utils = {
     resolveValue(v, ctx) {
       if (typeof v !== "string") return v;
@@ -15,6 +20,7 @@
       return parts[parts.length - 1] || "";
     },
     async postForm(url, data) {
+      await ensureApiReady();
       const body = new URLSearchParams();
       Object.keys(data || {}).forEach((k) => {
         if (data[k] !== undefined && data[k] !== null) body.append(k, String(data[k]));
@@ -27,6 +33,7 @@
       return text;
     },
     async postMultipart(url, files, dirs) {
+      await ensureApiReady();
       const fd = new FormData();
       (files || []).forEach((f) => fd.append("files[]", f));
       (dirs || []).forEach((d) => fd.append("dirs[]", String(d)));
@@ -38,6 +45,7 @@
       return text;
     },
     async downloadByPost(url, data, filenameHint) {
+      await ensureApiReady();
       const body = new URLSearchParams();
       Object.keys(data || {}).forEach((k) => {
         if (data[k] !== undefined && data[k] !== null) body.append(k, String(data[k]));

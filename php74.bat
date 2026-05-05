@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "ROOT=%~dp0"
-set "PHP_EXE=%ROOT%.tool\php-8.4.20-nts-Win32-vs17-x64\php.exe"
+set "PHP_EXE=%ROOT%.tool\php-7.4.33-nts-Win32-vc15-x64\php.exe"
 set "HOST=0.0.0.0"
 set "PORT=%~1"
 set "UPLOAD_MAX=1024M"
@@ -17,12 +17,12 @@ set "SERVER_CONFIG=%ROOT%manager\config\servar.json"
 
 (
   echo {
-  echo   "api_version": "php84"
+  echo   "api_version": "php74"
   echo }
 ) > "%SERVER_CONFIG%"
 
 echo.
-echo PHP 8.4 server is starting...
+echo PHP 7.4 server is starting...
 echo Root   : %ROOT%
 echo PHP    : %PHP_EXE%
 echo Bind   : http://%HOST%:%PORT%

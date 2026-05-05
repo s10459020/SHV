@@ -6,6 +6,7 @@
 		<meta http-equiv="Pragma" content="no-cache">
 		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 		<script src="https://code.jquery.com/jquery.min.js"></script>
+		<script src="/manager/js/api.js"></script>
 		<script src="/manager/js/preview/markdown_preview.js"></script>
 		<style>
 			:root{
@@ -258,22 +259,43 @@
 			let workspaceRootAbs = '';
 						
 			// api
-			let typeApi = 		"/manager/api/site/get_path_type.php" //?path
-			let dirScanApi 	= 	"/manager/api/dir/scan_dir.php" //?dir
-			let dirCreateApi = 	"/manager/api/dir/create_dir.php" //?dir
-			let dirDeleteApi = 	"/manager/api/dir/delete_dir.php" //?path
-			let dirRenameApi = 	"/manager/api/dir/rename_dir.php" //?path, name
-			let dirDownloadApi = "/manager/api/dir/download_dir.php" //?path
-			let fileScanApi = 	"/manager/api/file/scan_file.php" //?dir
-			let fileReadApi = 	"/manager/api/file/read_file.php" //?path
-			let fileWriteApi = 	"/manager/api/file/write_file.php" //?path, content
-			let fileCreateApi = "/manager/api/file/create_file.php" //?dir
-			let fileDeleteApi = "/manager/api/file/delete_file.php" //?path
-			let fileRenameApi = "/manager/api/file/rename_file.php" //?path, name
-			let fileDownloadApi = "/manager/api/file/download_file.php" //?path
-			let filePreviewApi = "/manager/api/file/preview_file.php" //?path
-			let fileUploadsApi = "/manager/api/file/upload_files.php" //?path
+			let rootApi = '';
+			let typeApi = '';
+			let dirScanApi = '';
+			let dirCreateApi = '';
+			let dirDeleteApi = '';
+			let dirRenameApi = '';
+			let dirDownloadApi = '';
+			let fileScanApi = '';
+			let fileReadApi = '';
+			let fileWriteApi = '';
+			let fileCreateApi = '';
+			let fileDeleteApi = '';
+			let fileRenameApi = '';
+			let fileDownloadApi = '';
+			let filePreviewApi = '';
+			let fileUploadsApi = '';
 			const EXPLORER_PATH_COOKIE = 'manager_explorer_path_v1';
+
+			function applyApiEndpoints(){
+				const base = ManagerApi.getBase();
+				rootApi = `${base}/site/get_root.php`;
+				typeApi = `${base}/site/get_path_type.php`;
+				dirScanApi = `${base}/dir/scan_dir.php`;
+				dirCreateApi = `${base}/dir/create_dir.php`;
+				dirDeleteApi = `${base}/dir/delete_dir.php`;
+				dirRenameApi = `${base}/dir/rename_dir.php`;
+				dirDownloadApi = `${base}/dir/download_dir.php`;
+				fileScanApi = `${base}/file/scan_file.php`;
+				fileReadApi = `${base}/file/read_file.php`;
+				fileWriteApi = `${base}/file/write_file.php`;
+				fileCreateApi = `${base}/file/create_file.php`;
+				fileDeleteApi = `${base}/file/delete_file.php`;
+				fileRenameApi = `${base}/file/rename_file.php`;
+				fileDownloadApi = `${base}/file/download_file.php`;
+				filePreviewApi = `${base}/file/preview_file.php`;
+				fileUploadsApi = `${base}/file/upload_files.php`;
+			}
 
 			function isAbsDrivePath(path){
 				return /^[A-Za-z]:\//.test(String(path || '').replace(/\\/g, '/'));
@@ -404,7 +426,9 @@
 			}
 			async function boot(){
 				try{
-					workspaceRootAbs = normalizeAbsPath(await $.post('/manager/api/site/get_root.php', {}));
+					await ManagerApi.ready();
+					applyApiEndpoints();
+					workspaceRootAbs = normalizeAbsPath(await $.post(rootApi, {}));
 				}catch(_){
 					workspaceRootAbs = '';
 				}
@@ -736,7 +760,7 @@
 				switch(type){
 					case 'dir':
 						pathDom.val(path)
-						formDom.attr('method', 'POST')
+						formDom.attr('method', 'GET')
 						formDom.attr('action', dirDownloadApi)
 						formDom.submit()
 						break;
@@ -850,15 +874,7 @@
 					}
 					return { files, dirs };
 				}
-				const fallbackFiles = snapshot.files;
-				fallbackFiles.forEach((f) => {
-					files.push(f);
-					dirs.push(targetPath);
-				});
-				return {
-					files,
-					dirs,
-				};
+				return { files, dirs };
 			}
 			
 		</script>

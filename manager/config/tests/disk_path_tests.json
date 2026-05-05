@@ -1,0 +1,32 @@
+{
+    "sectionName":  "Disk Path",
+    "initScript":  "await ManagerApi.ready();\nconst fileApiBase = ManagerApi.getBase() + \u0027/file\u0027;\nconst dirApiBase = ManagerApi.getBase() + \u0027/dir\u0027;\nconst siteApiBase = ManagerApi.getBase() + \u0027/site\u0027;\nconst workspaceRoot = (await utils.postForm(siteApiBase + \u0027/get_root.php\u0027, {})).trim().replace(/\\/$/, \u0027\u0027);\nconst m = workspaceRoot.match(/^([A-Za-z]:)\\//);\nassert(m \u0026\u0026 m[1], \u0027disk init: cannot resolve drive root\u0027);\nconst driveRoot = m[1] + \u0027/\u0027;\nconst diskPost = (url, data) =\u003e utils.postForm(url, Object.assign({ disk: 1 }, data || {}));\nreturn {\n  workspaceRoot,\n  driveRoot,\n  diskPost,\n  diskDirName: \u0027shv-disk-dir\u0027,\n  diskDirRenamed: \u0027shv-disk-dir-renamed\u0027,\n  diskFileName: \u0027shv-disk-file.txt\u0027,\n  diskFileRenamed: \u0027shv-disk-file-renamed.txt\u0027,\n  createDirUrl: dirApiBase + \u0027/create_dir.php\u0027,\n  scanDirUrl: dirApiBase + \u0027/scan_dir.php\u0027,\n  renameDirUrl: dirApiBase + \u0027/rename_dir.php\u0027,\n  deleteDirUrl: dirApiBase + \u0027/delete_dir.php\u0027,\n  createFileUrl: fileApiBase + \u0027/create_file.php\u0027,\n  scanFileUrl: fileApiBase + \u0027/scan_file.php\u0027,\n  writeFileUrl: fileApiBase + \u0027/write_file.php\u0027,\n  readFileUrl: fileApiBase + \u0027/read_file.php\u0027,\n  renameFileUrl: fileApiBase + \u0027/rename_file.php\u0027,\n  deleteFileUrl: fileApiBase + \u0027/delete_file.php\u0027,\n  message: \u0027init done: \u0027 + driveRoot\n};",
+    "finallyScript":  "try { await diskPost(deleteFileUrl, { path: driveRoot + diskDirName + \u0027/\u0027 + diskFileName }); } catch (_) {}\ntry { await diskPost(deleteFileUrl, { path: driveRoot + diskDirName + \u0027/\u0027 + diskFileRenamed }); } catch (_) {}\ntry { await diskPost(deleteFileUrl, { path: driveRoot + diskDirRenamed + \u0027/\u0027 + diskFileName }); } catch (_) {}\ntry { await diskPost(deleteFileUrl, { path: driveRoot + diskDirRenamed + \u0027/\u0027 + diskFileRenamed }); } catch (_) {}\nfor (const d of [diskDirName, diskDirRenamed]) {\n  try { await diskPost(deleteDirUrl, { path: driveRoot + d + \u0027/\u0027 }); } catch (_) {}\n}\nreturn { message: \u0027cleanup done\u0027 };",
+    "tests":  [
+                  {
+                      "id":  "create",
+                      "name":  "create",
+                      "scriptText":  "try { await diskPost(deleteFileUrl, { path: driveRoot + diskDirName + \u0027/\u0027 + diskFileName }); } catch (_) {}\ntry { await diskPost(deleteFileUrl, { path: driveRoot + diskDirName + \u0027/\u0027 + diskFileRenamed }); } catch (_) {}\ntry { await diskPost(deleteFileUrl, { path: driveRoot + diskDirRenamed + \u0027/\u0027 + diskFileName }); } catch (_) {}\ntry { await diskPost(deleteFileUrl, { path: driveRoot + diskDirRenamed + \u0027/\u0027 + diskFileRenamed }); } catch (_) {}\ntry { await diskPost(deleteDirUrl, { path: driveRoot + diskDirName + \u0027/\u0027 }); } catch (_) {}\ntry { await diskPost(deleteDirUrl, { path: driveRoot + diskDirRenamed + \u0027/\u0027 }); } catch (_) {}\nconst dt = await diskPost(createDirUrl, { dir: driveRoot, name: diskDirName });\nconst dm = dt.match(/\\[(.+?)\\/\\]/);\nassert(dm \u0026\u0026 dm[1], \u0027create_dir: parse fail\u0027);\nconst dirPath = dm[1];\nconst ft = await diskPost(createFileUrl, { dir: dirPath + \u0027/\u0027, name: diskFileName });\nconst fm = ft.match(/\\[(.+?)\\]/);\nassert(fm \u0026\u0026 fm[1], \u0027create_file: parse fail\u0027);\nreturn { dirPath, filePath: fm[1], message: \u0027created dir + file\u0027 };"
+                  },
+                  {
+                      "id":  "write_read",
+                      "name":  "write_read",
+                      "scriptText":  "await diskPost(writeFileUrl, { path: filePath, content: \u0027disk path test content\u0027 });\nconst text = await diskPost(readFileUrl, { path: filePath });\nassert(text.includes(\u0027disk path test content\u0027), \u0027write_read: content mismatch\u0027);\nreturn { message: \u0027write/read ok\u0027 };"
+                  },
+                  {
+                      "id":  "scan",
+                      "name":  "scan",
+                      "scriptText":  "const dirs = JSON.parse((await diskPost(scanDirUrl, { path: driveRoot })) || \u0027[]\u0027);\nconst files = JSON.parse((await diskPost(scanFileUrl, { path: dirPath + \u0027/\u0027 })) || \u0027[]\u0027);\nassert(Array.isArray(dirs), \u0027scan: dirs not array\u0027);\nassert(Array.isArray(files), \u0027scan: files not array\u0027);\nassert(dirs.includes(utils.basename(dirPath)), \u0027scan: dir missing\u0027);\nassert(files.includes(utils.basename(filePath)), \u0027scan: file missing\u0027);\nreturn { message: \u0027scan ok\u0027 };"
+                  },
+                  {
+                      "id":  "rename",
+                      "name":  "rename",
+                      "scriptText":  "const dt = await diskPost(renameDirUrl, { path: dirPath + \u0027/\u0027, name: diskDirRenamed });\nconst dm = dt.match(/to \\[(.+?)\\/\\]/);\nassert(dm \u0026\u0026 dm[1], \u0027rename dir: parse fail\u0027);\ndirPath = dm[1];\nconst ft = await diskPost(renameFileUrl, { path: dirPath + \u0027/\u0027 + utils.basename(filePath), name: diskFileRenamed });\nconst fm = ft.match(/to \\[(.+?)\\]/);\nassert(fm \u0026\u0026 fm[1], \u0027rename file: parse fail\u0027);\nfilePath = fm[1];\nreturn { dirPath, filePath, message: \u0027renamed both\u0027 };"
+                  },
+                  {
+                      "id":  "delete",
+                      "name":  "delete",
+                      "scriptText":  "await diskPost(deleteFileUrl, { path: filePath });\nawait diskPost(deleteDirUrl, { path: dirPath + \u0027/\u0027 });\nconst dirs = JSON.parse((await diskPost(scanDirUrl, { path: driveRoot })) || \u0027[]\u0027);\nassert(Array.isArray(dirs), \u0027delete verify: dirs not array\u0027);\nassert(!dirs.includes(utils.basename(dirPath)), \u0027delete verify: dir still exists\u0027);\nreturn { message: \u0027deleted + verified\u0027 };"
+                  }
+              ]
+}

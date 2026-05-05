@@ -102,6 +102,14 @@
   <main class="wrap">
     <h1 class="title">SHV Homepage</h1>
     <p class="subtitle">選擇要進入的功能頁面</p>
+    <p class="subtitle">
+      API 版本：
+      <select id="apiVersionSelect">
+        <option value="php74">php74</option>
+        <option value="php84">php84</option>
+      </select>
+      <span id="apiVersionHint"></span>
+    </p>
     <section class="grid">
       <a class="card" href="/manager/explorer.html">
         <span class="badge home-banner">V3</span>
@@ -122,6 +130,7 @@
       </a>
     </section>
   </main>
+  <script src="/manager/js/api.js"></script>
   <script>
     document.querySelectorAll(".home-banner").forEach((el) => {
       el.addEventListener("click", (e) => {
@@ -129,6 +138,17 @@
         e.stopPropagation();
         window.location.href = "/manager/index.html";
       });
+    });
+    const select = document.getElementById("apiVersionSelect");
+    const hint = document.getElementById("apiVersionHint");
+    ManagerApi.ready().then(() => {
+      const v = ManagerApi.getVersion() === "api74" ? "php74" : "php84";
+      select.value = v;
+      hint.textContent = `(${ManagerApi.getBase()})`;
+    });
+    select.addEventListener("change", () => {
+      ManagerApi.setVersion(select.value);
+      hint.textContent = `(${ManagerApi.getBase()})`;
     });
   </script>
 </body>

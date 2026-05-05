@@ -8,6 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Diff</title>
   <script src="https://code.jquery.com/jquery.min.js"></script>
+  <script src="/manager/js/api.js"></script>
   <style>
     :root{--bg:#f2f5fb;--card:#fff;--line:#d7e2f3;--text:#1f2a37;--muted:#58657a;--red:#ffd8d8;--yellow:#fff2bf;--green:#d9f8dc}
     *{box-sizing:border-box}
@@ -71,7 +72,7 @@
       </article>
     </section>
   </main>
-  <form id="downloadForm" method="POST" action="/manager/api/dir/download_files.php" target="_blank" style="display:none;">
+  <form id="downloadForm" method="GET" action="" target="_blank" style="display:none;">
     <input type="hidden" name="base" id="downloadBase">
     <input type="hidden" name="file_paths" id="downloadFiles">
   </form>
@@ -87,10 +88,18 @@
       return segs.length ? segs[segs.length - 1] : '';
     })();
 
-    const apiList = '/manager/api/dir/scan_all_file.php';
-    const apiUpload = '/manager/api/file/upload_files.php';
-    const apiDelete = '/manager/api/file/delete_file.php';
+    let apiList = '';
+    let apiUpload = '';
+    let apiDelete = '';
     const MTIME_TOLERANCE_MS = 2000;
+
+    function applyApiEndpoints() {
+      const base = ManagerApi.getBase();
+      apiList = `${base}/dir/scan_all_file.php`;
+      apiUpload = `${base}/file/upload_files.php`;
+      apiDelete = `${base}/file/delete_file.php`;
+      $('#downloadForm').attr('action', `${base}/dir/download_files.php`);
+    }
 
     let leftFiles = [];
     let rightFiles = [];
@@ -402,16 +411,21 @@
       openPreviewFromDiff(abs);
     });
 
-    initDrop();
-    if (fresh) {
-      clearDiffState();
-      const nqs = new URLSearchParams(location.search);
-      nqs.delete('fresh');
-      const next = location.pathname + (nqs.toString() ? ('?' + nqs.toString()) : '');
-      history.replaceState(null, '', next);
+    async function boot() {
+      await ManagerApi.ready();
+      applyApiEndpoints();
+      initDrop();
+      if (fresh) {
+        clearDiffState();
+        const nqs = new URLSearchParams(location.search);
+        nqs.delete('fresh');
+        const next = location.pathname + (nqs.toString() ? ('?' + nqs.toString()) : '');
+        history.replaceState(null, '', next);
+      }
+      if (restore || !fresh) loadDiffState();
+      loadLeft().catch(err => { $('#leftItems').html(`<div class="muted">load fail: ${String(err)}</div>`); });
     }
-    if (restore || !fresh) loadDiffState();
-    loadLeft().catch(err => { $('#leftItems').html(`<div class="muted">load fail: ${String(err)}</div>`); });
+    boot();
   </script>
 </body>
 </html>

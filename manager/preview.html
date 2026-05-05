@@ -8,6 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>Preview</title>
   <script src="https://code.jquery.com/jquery.min.js"></script>
+  <script src="/manager/js/api.js"></script>
   <script src="/manager/js/preview/markdown_preview.js"></script>
   <style>
     :root{--bg:#f2f5fb;--card:#fff;--line:#d7e2f3;--text:#1f2a37;--muted:#58657a}
@@ -45,9 +46,15 @@
     const diffBase = decodeURIComponent(q.get('base') || '');
     const restore = String(q.get('restore') || '') === '1';
 
-    const fileReadApi = '/manager/api/file/read_file.php';
-    const filePreviewApi = '/manager/api/file/preview_file.php';
+    let fileReadApi = '';
+    let filePreviewApi = '';
     $('#pathText').text(blob ? (`[local] ${name || path}`) : path);
+
+    function applyApiEndpoints() {
+      const base = ManagerApi.getBase();
+      fileReadApi = `${base}/file/read_file.php`;
+      filePreviewApi = `${base}/file/preview_file.php`;
+    }
 
     function parentDir(p){
       const s = String(p || '').replace(/\\/g, '/');
@@ -130,7 +137,12 @@
       frame.src = previewUrl;
     }
 
-    render();
+    async function boot() {
+      await ManagerApi.ready();
+      applyApiEndpoints();
+      render();
+    }
+    boot();
   </script>
 </body>
 </html>
